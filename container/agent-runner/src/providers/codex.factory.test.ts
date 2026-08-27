@@ -18,4 +18,13 @@ describe('CodexProvider', () => {
   it('requires the shared memory hook before starting a query', () => {
     expect(() => new CodexProvider({}).query({ prompt: 'hello', cwd: '/workspace/agent' })).toThrow(/not registered/);
   });
+
+  it('accepts the new-core managed-file handshake', () => {
+    const options = {
+      coreIo: {
+        realizeManagedFiles: () => {},
+      },
+    };
+    expect(new CodexProvider(options)).toBeInstanceOf(CodexProvider);
+  });
 });
