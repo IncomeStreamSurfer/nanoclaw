@@ -36,6 +36,7 @@ import { getAgentMailbox, readMailboxContext } from './mailbox/index.js';
 import './providers/index.js';
 import { createProvider, type ProviderName } from './providers/factory.js';
 import { resolvePluginServer } from './plugin-mcp.js';
+import { registerProviderMemorySessionHook } from './provider-contracts/realize.js';
 import type { McpServerConfig } from './providers/types.js';
 import { runPollLoop } from './poll-loop.js';
 
@@ -116,7 +117,7 @@ async function main(): Promise<void> {
     model: config.model,
     effort: config.effort,
   });
-  provider.registerMemorySessionHook(MEMORY_SESSION_HOOK);
+  registerProviderMemorySessionHook(providerName, provider, MEMORY_SESSION_HOOK);
 
   try {
     await runPollLoop({

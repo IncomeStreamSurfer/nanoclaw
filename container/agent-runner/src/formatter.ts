@@ -1,6 +1,8 @@
 import { findByRouting } from './destinations.js';
 import type { MessageInRow } from './db/messages-in.js';
 import { TIMEZONE, formatLocalTime, formatLocalStamp } from './timezone.js';
+import './provider-contracts/index.js';
+import { listProviderRuntimeContracts } from './provider-contracts/registry.js';
 
 /**
  * channel_type marking cross-session context copies (accumulate fan-out from
@@ -23,8 +25,14 @@ export function isSessionEcho(msg: MessageInRow): boolean {
  */
 export type CommandCategory = 'admin' | 'filtered' | 'passthrough' | 'none';
 
-const ADMIN_COMMANDS = new Set(['/remote-control', '/clear', '/compact', '/context', '/cost', '/files', '/upload-trace']);
-const FILTERED_COMMANDS = new Set(['/help', '/login', '/logout', '/doctor', '/config', '/start']);
+const ADMIN_COMMANDS = new Set([
+  '/clear',
+  '/upload-trace',
+  ...listProviderRuntimeContracts().flatMap((contract) => contract.commands.nativeAdmin),
+]);
+const FILTERED_COMMANDS = new Set(
+  listProviderRuntimeContracts().flatMap((contract) => contract.commands.nativeFiltered),
+);
 
 export interface CommandInfo {
   category: CommandCategory;
@@ -136,9 +144,7 @@ export function extractRouting(messages: MessageInRow[]): RoutingContext {
     inReplyTo: first?.id ?? null,
     // Echo rows riding along with a task must not disable one-door delivery:
     // taskRun as long as at least one task row and no non-task/non-echo row.
-    taskRun:
-      messages.some((m) => m.kind === 'task') &&
-      messages.every((m) => m.kind === 'task' || isSessionEcho(m)),
+    taskRun: messages.some((m) => m.kind === 'task') && messages.every((m) => m.kind === 'task' || isSessionEcho(m)),
   };
 }
 

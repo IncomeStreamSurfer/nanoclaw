@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import '../provider-contracts/index.js';
 import { ClaudeProvider } from './claude.js';
 
 // maybeRotateContinuation guards the cold-resume failure mode: a long-lived
@@ -45,7 +46,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  const restore = (k: string, v: string | undefined) => (v === undefined ? delete process.env[k] : (process.env[k] = v));
+  const restore = (k: string, v: string | undefined) =>
+    v === undefined ? delete process.env[k] : (process.env[k] = v);
   restore('HOME', prevHome);
   restore('NANOCLAW_CONVERSATIONS_DIR', prevConv);
   restore('CLAUDE_TRANSCRIPT_ROTATE_BYTES', prevBytes);
@@ -71,6 +73,48 @@ describe('ClaudeProvider.maybeRotateContinuation', () => {
     expect(fs.existsSync(p)).toBe(false); // original moved out of the resume path
     const dir = path.dirname(p);
     expect(fs.readdirSync(dir).some((f) => f.startsWith('sess-big.jsonl.rotated-'))).toBe(true);
+  });
+
+  it('rotates by size when the first line and archive read both fail', () => {
+    process.env.CLAUDE_TRANSCRIPT_ROTATE_BYTES = String(64 * 1024);
+    const p = writeTranscript('sess-unreadable', 200 * 1024);
+    let firstLineReadAttempted = false;
+    let archiveReadAttempted = false;
+    let archiveFailureLogged = false;
+    const openSpy = spyOn(fs, 'openSync').mockImplementation(() => {
+      firstLineReadAttempted = true;
+      throw new Error('first line unreadable');
+    });
+    const readSpy = spyOn(fs, 'readFileSync').mockImplementation(() => {
+      archiveReadAttempted = true;
+      throw new Error('archive unreadable');
+    });
+    const errorSpy = spyOn(console, 'error').mockImplementation((line) => {
+      if (String(line).includes('Failed to archive transcript')) archiveFailureLogged = true;
+    });
+    const renameClock = 1_234_567_890;
+    let clockReads = 0;
+    const nowSpy = spyOn(Date, 'now').mockImplementation(() => {
+      clockReads++;
+      return renameClock;
+    });
+    let reason: string | null;
+    try {
+      reason = new ClaudeProvider().maybeRotateContinuation('sess-unreadable', CWD);
+    } finally {
+      openSpy.mockRestore();
+      readSpy.mockRestore();
+      errorSpy.mockRestore();
+      nowSpy.mockRestore();
+    }
+
+    expect(reason!).toContain('MB');
+    expect(firstLineReadAttempted).toBe(true);
+    expect(archiveReadAttempted).toBe(true);
+    expect(archiveFailureLogged).toBe(true);
+    expect(clockReads).toBe(1);
+    expect(fs.existsSync(p)).toBe(false);
+    expect(fs.readdirSync(path.dirname(p))).toContain(`sess-unreadable.jsonl.rotated-${renameClock}`);
   });
 
   it('rotates an aged transcript even when small', () => {

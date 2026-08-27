@@ -4,6 +4,8 @@ import os from 'os';
 import path from 'path';
 
 import { MEMORY_SESSION_HOOK } from '../memory/session-hook.js';
+import '../provider-contracts/index.js';
+import { registerProviderMemorySessionHook } from '../provider-contracts/realize.js';
 import { ClaudeProvider } from './claude.js';
 
 let configDir: string;
@@ -45,8 +47,8 @@ describe('Claude memory SessionStart registration', () => {
     );
 
     const provider = new ClaudeProvider();
-    provider.registerMemorySessionHook(MEMORY_SESSION_HOOK);
-    provider.registerMemorySessionHook(MEMORY_SESSION_HOOK);
+    registerProviderMemorySessionHook('claude', provider, MEMORY_SESSION_HOOK);
+    registerProviderMemorySessionHook('claude', provider, MEMORY_SESSION_HOOK);
 
     const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
     expect(settings.customValue).toBe('preserved');

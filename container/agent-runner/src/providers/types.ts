@@ -1,4 +1,5 @@
 import type { MemorySessionHookRegistration } from '../memory/session-hook.js';
+import type { RuntimeManagedFile } from '../provider-contracts/registry.js';
 
 export interface AgentProvider {
   /**
@@ -35,7 +36,9 @@ export interface AgentProvider {
    * markdown into the agent's `conversations/` dir); providers that persist
    * and archive their own transcript (e.g. the Claude Agent SDK's `.jsonl`)
    * omit it. Best-effort: the loop catches and logs anything it throws. The
-   * implementation lives with the provider, never in the runner.
+   * Contractless providers implement this directly. For a declared
+   * core-owned archive, the factory replaces it with the core executor while
+   * the provider implementation remains an old-core compatibility fallback.
    */
   onExchangeComplete?(exchange: ProviderExchange): void;
 
@@ -55,7 +58,9 @@ export interface AgentProvider {
    * the continuation and start a fresh session (the provider archives any
    * recoverable summary first); return null to keep resuming.
    *
-   * Guards the cold-resume failure mode: a long-lived hub session accumulates
+   * For declared core-owned rotation, the factory replaces the provider
+   * fallback with the core executor. This guards the cold-resume failure mode:
+   * a long-lived hub session accumulates
    * days of history — including base64 image blocks the agent Read — and the
    * SDK reloads the whole .jsonl on every resume. Past a threshold the first
    * turn alone can exceed the host's idle ceiling, so the container is killed
@@ -93,6 +98,10 @@ export interface ProviderOptions {
    * through to the underlying SDK. If omitted, the SDK default is used.
    */
   effort?: string;
+  /** Core-owned provider I/O, bound to the selected provider by new core. */
+  coreIo?: {
+    realizeManagedFiles(when: RuntimeManagedFile['when'], context: unknown): void;
+  };
 }
 
 export interface QueryInput {

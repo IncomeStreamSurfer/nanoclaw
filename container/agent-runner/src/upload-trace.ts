@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import type { MessageInRow } from './db/messages-in.js';
+import './provider-contracts/index.js';
+import { newestRegisteredTrace } from './provider-contracts/realize.js';
 
 /**
  * `/upload-trace` command: upload this session's Claude Code transcript to the user's
@@ -29,33 +30,6 @@ export function isUploadTraceCommand(msg: MessageInRow): boolean {
     return false; // non-JSON content is never a command
   }
   return text.toLowerCase().startsWith('/upload-trace');
-}
-
-/** Newest Claude Code transcript jsonl (the current session). */
-function newestTranscript(): string | null {
-  const projects = path.join(os.homedir(), '.claude', 'projects');
-  let best: { p: string; m: number } | null = null;
-  let dirs: string[];
-  try {
-    dirs = fs.readdirSync(projects);
-  } catch {
-    return null;
-  }
-  for (const dir of dirs) {
-    let files: string[];
-    try {
-      files = fs.readdirSync(path.join(projects, dir));
-    } catch {
-      continue;
-    }
-    for (const f of files) {
-      if (!f.endsWith('.jsonl')) continue;
-      const p = path.join(projects, dir, f);
-      const m = fs.statSync(p).mtimeMs;
-      if (!best || m > best.m) best = { p, m };
-    }
-  }
-  return best?.p ?? null;
 }
 
 function curl(args: string[], input?: string): { ok: boolean; out: string } {
@@ -103,7 +77,7 @@ function notSignedInMessage(body: string): string {
 
 /** Returns a user-facing status line. Never throws. */
 export function uploadTrace(): string {
-  const file = newestTranscript();
+  const file = newestRegisteredTrace();
   if (!file) return 'No transcript to upload for this session yet.';
 
   // whoami, capturing the body + HTTP status (no -f, so the gateway's error
