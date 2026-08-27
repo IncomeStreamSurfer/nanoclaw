@@ -42,7 +42,6 @@ function configurationInputsFor(instance: AgentProvider | undefined): Partial<Ru
 export function realizeProviderManagedFiles(
   provider: string,
   when: RuntimeManagedFile['when'],
-  context: unknown,
   instance?: AgentProvider,
 ): void {
   const contract = getProviderRuntimeContract(provider);
@@ -71,7 +70,6 @@ export function realizeProviderManagedFiles(
     const result = file.transform({
       exists,
       content,
-      context,
       filePath,
       sections: renderManagedFileSections(contract, file, inputs),
     });
@@ -85,7 +83,7 @@ export function registerProviderMemorySessionHook(
   hook: MemorySessionHookRegistration,
 ): void {
   providerMemoryHooks.set(provider, hook);
-  realizeProviderManagedFiles(providerName, 'memory-session-hook-registration', hook, provider);
+  realizeProviderManagedFiles(providerName, 'memory-session-hook-registration', provider);
   provider.registerMemorySessionHook(hook);
 }
 

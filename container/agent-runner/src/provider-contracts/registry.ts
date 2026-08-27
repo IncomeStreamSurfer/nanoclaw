@@ -35,8 +35,6 @@ export interface RuntimeFileTransformInput {
   exists: boolean;
   content: string;
   filePath: string;
-  /** Provider-passed opaque context (present on realize calls, absent in probes). */
-  context: unknown;
   /** Rendered output of every configuration capability bound to this file. */
   sections: Partial<Record<RuntimeConfigurationCapabilityName, unknown>>;
 }
@@ -372,7 +370,6 @@ function probeConfiguration(provider: string, contract: ProviderRuntimeContract)
         exists: false,
         content: '',
         filePath: `nanoclaw-probe:${file.relativePath}`,
-        context: undefined,
         sections,
       });
       return { threw: false, content: result.kind === 'replace' ? result.content : null };

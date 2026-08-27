@@ -6,7 +6,6 @@ import { registerProviderHostContract, type ProviderHostContract } from './regis
 export const CLAUDE_COMPATIBLE_HOST_SURFACES = {
   projectDocument: {
     fileName: DEFAULT_PROJECT_DOC.fileName,
-    baseDocumentFile: 'CLAUDE.md',
     maxBytes: DEFAULT_PROJECT_DOC.maxBytes,
     containerPath: '/workspace/agent/CLAUDE.md',
     mountClass: 'group-state',

@@ -24,7 +24,7 @@ export function createProvider(name: ProviderName, options: ProviderOptions = {}
       ? {
           ...options,
           coreIo: {
-            realizeManagedFiles: (when, context) => realizeProviderManagedFiles(name, when, context, instance),
+            realizeManagedFiles: (when) => realizeProviderManagedFiles(name, when, instance),
           },
         }
       : options,

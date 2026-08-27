@@ -13,19 +13,22 @@
 
 import path from 'path';
 
+import type { ProviderInstructionFacts } from '../project-doc-compose.js';
 import { listProviderContainerConfigNames } from '../providers/provider-container-registry.js';
 
 export interface ProviderProjectDocument {
   fileName: string;
-  /** Shipped filename under core's container document root; never a host path. */
-  baseDocumentFile: string;
-  extraSections?: { name: string; body: string }[];
+  /**
+   * Typed variables for core's canonical instruction template. The prose is
+   * core-owned; a provider declares only paths, filenames, and flags.
+   */
+  instructions?: ProviderInstructionFacts;
   maxBytes?: number;
   /** Destination inside the agent container. */
   containerPath: string;
   /** Current effective admission class; declarations do not repair it. */
   mountClass: 'group-state' | 'allowlisted-extra';
-  /** Present when the shipped base document remains an install-surface policy root. */
+  /** Present when the canonical instruction template remains an install-surface policy root. */
   sourceProtection?: 'install-surface';
 }
 
@@ -203,16 +206,40 @@ function validateProviderHostContract(provider: string, contract: ProviderHostCo
     const doc = contract.projectDocument;
     if (doc === null || typeof doc !== 'object') throw new Error(`${provider}.projectDocument must be an object`);
     assertFileName(doc.fileName, `${provider}.projectDocument.fileName`);
-    assertFileName(doc.baseDocumentFile, `${provider}.projectDocument.baseDocumentFile`);
     assertContainerPath(doc.containerPath, `${provider}.projectDocument.containerPath`);
     assertAllowed(doc.mountClass, ['group-state', 'allowlisted-extra'], `${provider}.projectDocument.mountClass`);
-    if (doc.extraSections !== undefined) {
-      if (!Array.isArray(doc.extraSections)) {
-        throw new Error(`${provider}.projectDocument.extraSections must be an array`);
+    if (doc.instructions !== undefined) {
+      const facts = doc.instructions;
+      if (facts === null || typeof facts !== 'object') {
+        throw new Error(`${provider}.projectDocument.instructions must be an object`);
       }
-      for (const [index, section] of doc.extraSections.entries()) {
-        assertNonEmptyString(section?.name, `${provider}.projectDocument.extraSections[${index}].name`);
-        assertNonEmptyString(section?.body, `${provider}.projectDocument.extraSections[${index}].body`);
+      if (facts.nativeOverrideFiles !== undefined) {
+        if (!Array.isArray(facts.nativeOverrideFiles) || facts.nativeOverrideFiles.length === 0) {
+          throw new Error(`${provider}.projectDocument.instructions.nativeOverrideFiles must be a non-empty array`);
+        }
+        for (const file of facts.nativeOverrideFiles) {
+          assertFileName(file, `${provider}.projectDocument.instructions.nativeOverrideFiles[]`);
+        }
+      }
+      if (facts.nativeSkills !== undefined) {
+        const skills = facts.nativeSkills;
+        assertContainerPath(
+          skills?.discoveryPath,
+          `${provider}.projectDocument.instructions.nativeSkills.discoveryPath`,
+        );
+        assertContainerPath(skills.sharedSource, `${provider}.projectDocument.instructions.nativeSkills.sharedSource`);
+        assertNonEmptyString(
+          skills.selfAuthoredHome,
+          `${provider}.projectDocument.instructions.nativeSkills.selfAuthoredHome`,
+        );
+        if (!Array.isArray(skills.persistentRoots) || skills.persistentRoots.length === 0) {
+          throw new Error(
+            `${provider}.projectDocument.instructions.nativeSkills.persistentRoots must be a non-empty array`,
+          );
+        }
+        for (const root of skills.persistentRoots) {
+          assertNonEmptyString(root, `${provider}.projectDocument.instructions.nativeSkills.persistentRoots[]`);
+        }
       }
     }
     if (doc.maxBytes !== undefined && (!Number.isInteger(doc.maxBytes) || doc.maxBytes <= 0)) {

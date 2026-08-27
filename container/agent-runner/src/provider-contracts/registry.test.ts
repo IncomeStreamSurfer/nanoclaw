@@ -500,7 +500,7 @@ describe('provider runtime contracts', () => {
         return originalExistsSync(candidate);
       });
       try {
-        realizeProviderManagedFiles(name, 'before-query', {});
+        realizeProviderManagedFiles(name, 'before-query');
         expect(mkdirSpy).toHaveBeenCalledTimes(1);
       } finally {
         existsSpy.mockRestore();
@@ -513,7 +513,7 @@ describe('provider runtime contracts', () => {
       calls.length = 0;
       fs.writeFileSync(configPath, 'stale again');
       fs.writeFileSync(hooksPath, '{');
-      expect(() => realizeProviderManagedFiles(name, 'before-query', {})).toThrow();
+      expect(() => realizeProviderManagedFiles(name, 'before-query')).toThrow();
       expect(calls).toEqual(['config:false:', 'hooks:true:{']);
       expect(fs.readFileSync(configPath, 'utf-8')).toBe('new config\n');
       expect(fs.readFileSync(hooksPath, 'utf-8')).toBe('{');

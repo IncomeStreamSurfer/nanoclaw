@@ -67,7 +67,6 @@ const diagnosticSourceTransformer: ProviderFileTransformer = {
 registerProviderHostContract('ordered-mount-provider', {
   projectDocument: {
     fileName: 'AGENTS.md',
-    baseDocumentFile: 'CLAUDE.md',
     containerPath: '/workspace/agent/AGENTS.md',
     mountClass: 'allowlisted-extra',
   },
@@ -464,7 +463,6 @@ describe('ordered provider spawn operations', () => {
     const contract: ProviderHostContract = {
       projectDocument: {
         fileName: 'AGENTS.md',
-        baseDocumentFile: 'AGENTS.md',
         containerPath: '/workspace/agent/AGENTS.md',
         mountClass: 'group-state',
       },

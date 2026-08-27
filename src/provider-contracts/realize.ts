@@ -4,7 +4,7 @@ import path from 'path';
 import { DATA_DIR } from '../config.js';
 import { materializeTemplateSkills } from '../group-skills.js';
 import { log } from '../log.js';
-import type { ProjectDocSpec } from '../project-doc-compose.js';
+import { BASE_INSTRUCTIONS_PATH, type ProjectDocSpec } from '../project-doc-compose.js';
 
 import {
   listProviderHostContracts,
@@ -16,22 +16,18 @@ import {
 } from './registry.js';
 
 export function protectedProviderDocumentSourcePaths(projectRoot: string): string[] {
-  const documentsRoot = path.resolve(projectRoot, 'container');
-  return listProviderHostContracts().flatMap((contract) => {
-    if (contract.projectDocument === undefined) return [];
-    const { baseDocumentFile, sourceProtection } = contract.projectDocument;
-    return sourceProtection === 'install-surface' ? [resolveWithinRoot(documentsRoot, baseDocumentFile)] : [];
-  });
+  const anyProtection = listProviderHostContracts().some(
+    (contract) => contract.projectDocument?.sourceProtection === 'install-surface',
+  );
+  return anyProtection ? [path.resolve(projectRoot, BASE_INSTRUCTIONS_PATH)] : [];
 }
 
 export function providerProjectDocSpec(contract: ProviderHostContract): ProjectDocSpec | undefined {
   if (contract.projectDocument === undefined) return undefined;
-  const { fileName, baseDocumentFile, extraSections, maxBytes } = contract.projectDocument;
-  resolveWithinRoot(path.resolve(process.cwd(), 'container'), baseDocumentFile);
+  const { fileName, instructions, maxBytes } = contract.projectDocument;
   return {
     fileName,
-    baseDocPath: path.join('container', baseDocumentFile),
-    ...(extraSections ? { extraSections } : {}),
+    ...(instructions ? { instructions } : {}),
     ...(maxBytes === undefined ? {} : { maxBytes }),
   };
 }

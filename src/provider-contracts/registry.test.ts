@@ -104,14 +104,14 @@ describe('provider host contracts', () => {
 
   it.each([
     [
-      'host path',
+      'host path in override files',
       () => ({
         ...emptyContract(),
         projectDocument: {
           fileName: 'AGENTS.md',
-          baseDocumentFile: '/tmp/AGENTS.md',
           containerPath: '/workspace/agent/AGENTS.md',
           mountClass: 'group-state' as const,
+          instructions: { nativeOverrideFiles: ['/tmp/AGENTS.local.md'] },
         },
         spawnOperations: [{ kind: 'project-document' as const }, { kind: 'legacy-overlay' as const }],
       }),
@@ -164,16 +164,44 @@ describe('provider host contracts', () => {
   });
 
   it.each([
-    ['not an array', {}, /projectDocument\.extraSections must be an array/],
-    ['missing name', [{ body: 'body' }], /extraSections\[0\]\.name must be a non-empty string/],
-    ['missing body', [{ name: 'name' }], /extraSections\[0\]\.body must be a non-empty string/],
-    ['blank name', [{ name: ' ', body: 'body' }], /extraSections\[0\]\.name must be a non-empty string/],
-    ['blank body', [{ name: 'name', body: ' ' }], /extraSections\[0\]\.body must be a non-empty string/],
-  ])('rejects malformed project-document extra sections: %s', (_label, value, expected) => {
+    ['non-object facts', 'projectDocument.instructions', 'invalid', /instructions must be an object/],
+    [
+      'empty override files',
+      'projectDocument.instructions',
+      { nativeOverrideFiles: [] },
+      /nativeOverrideFiles must be a non-empty array/,
+    ],
+    [
+      'relative skills discovery path',
+      'projectDocument.instructions',
+      {
+        nativeSkills: {
+          discoveryPath: 'skills',
+          sharedSource: '/app/skills',
+          selfAuthoredHome: '~/.codex/skills',
+          persistentRoots: ['~/.codex'],
+        },
+      },
+      /nativeSkills\.discoveryPath/,
+    ],
+    [
+      'empty persistent roots',
+      'projectDocument.instructions',
+      {
+        nativeSkills: {
+          discoveryPath: '/workspace/agent/.agents/skills',
+          sharedSource: '/app/skills',
+          selfAuthoredHome: '~/.codex/skills',
+          persistentRoots: [],
+        },
+      },
+      /persistentRoots must be a non-empty array/,
+    ],
+  ])('rejects malformed project-document instruction facts: %s', (_label, field, value, expected) => {
     expect(() =>
       registerProviderHostContract(
-        contractName(`extra-sections-${_label}`, 'invalid'),
-        claudeContractWith('projectDocument.extraSections', value),
+        contractName(`instruction-facts-${_label}`, 'invalid'),
+        claudeContractWith(field, value),
       ),
     ).toThrow(expected);
   });
