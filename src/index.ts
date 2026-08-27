@@ -17,6 +17,7 @@ import { startHostModules, stopHostModules } from './host-lifecycle.js';
 import { routeInbound } from './router.js';
 import { log } from './log.js';
 import { enforceUpgradeTripwire } from './upgrade-state.js';
+import { assertProviderHostConformance } from './provider-contracts/registry.js';
 
 // Response registry lives in response-registry.ts to break the
 // circular import cycle: src/index.ts imports src/modules/index.js for side
@@ -64,6 +65,7 @@ async function main(): Promise<void> {
 
   // 0. Circuit breaker — backoff on rapid restarts
   await enforceStartupBackoff();
+  assertProviderHostConformance();
 
   // 0.5 Upgrade tripwire — refuse to start if this install was updated
   // outside the sanctioned path (raw `git pull` instead of /update-nanoclaw).

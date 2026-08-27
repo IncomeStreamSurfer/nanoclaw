@@ -21,13 +21,28 @@ vi.mock('./log.js', () => ({
     fatal: vi.fn(),
   },
 }));
+vi.mock('./modules/mount-security/index.js', () => ({
+  validateAdditionalMounts: vi.fn((mounts) =>
+    mounts.map((mount: { hostPath: string; containerPath?: string; readonly?: boolean }) => ({
+      hostPath: mount.hostPath,
+      containerPath: `/workspace/extra/${mount.containerPath ?? path.basename(mount.hostPath)}`,
+      readonly: mount.readonly ?? true,
+    })),
+  ),
+}));
 
-import { buildMounts } from './container-runner.js';
+import { buildMounts, resolveProviderContribution } from './container-runner.js';
 import { closeDb, createAgentGroup, initTestDb, runMigrations } from './db/index.js';
 import { ensureContainerConfig } from './db/container-configs.js';
 import { initGroupFilesystem } from './group-init.js';
 import { PERSONA_PREPEND_FILE } from './group-persona.js';
 import { log } from './log.js';
+import { initializeProviderGroupSurfaces, realizeProviderSpawnSurfaces } from './provider-contracts/realize.js';
+import {
+  registerProviderHostContract,
+  type ProviderFileTransformer,
+  type ProviderHostContract,
+} from './provider-contracts/registry.js';
 import { registerProviderContainerConfig } from './providers/provider-container-registry.js';
 import type { ContainerConfig } from './container-config.js';
 import type { AgentGroup, Session } from './types.js';
@@ -35,6 +50,89 @@ import type { AgentGroup, Session } from './types.js';
 // A provider that declares (at registration) that it owns its agent surfaces.
 // Registered once — the registry is module-global and rejects duplicates.
 registerProviderContainerConfig('surfaces-test-provider', () => ({}), { providesAgentSurfaces: true });
+const oldPayloadContribution = vi.fn(() => ({ env: { COMPAT: 'legacy' } }));
+registerProviderContainerConfig('old-payload-provider', oldPayloadContribution, { providesAgentSurfaces: true });
+const currentPayloadContribution = vi.fn((ctx: { groupDir: string }) => ({
+  env: { COMPAT: 'current' },
+  mounts: [{ hostPath: ctx.groupDir, containerPath: '/home/node/.codex', readonly: false }],
+}));
+registerProviderContainerConfig('ordered-mount-provider', currentPayloadContribution, {
+  providesAgentSurfaces: true,
+});
+const diagnosticSourceTransformer: ProviderFileTransformer = {
+  transform: () => ({ kind: 'replace', content: '{}\n' }),
+  mapIoFailure: () => ({ level: 'warn', message: 'test failure' }),
+};
+
+registerProviderHostContract('ordered-mount-provider', {
+  projectDocument: {
+    fileName: 'AGENTS.md',
+    baseDocumentFile: 'CLAUDE.md',
+    containerPath: '/workspace/agent/AGENTS.md',
+    mountClass: 'allowlisted-extra',
+  },
+  stateVolumes: [
+    {
+      id: 'ordered-state',
+      directory: '.ordered-state',
+      containerPath: '/home/node/.codex',
+      scope: 'group',
+      mode: 'rw',
+      mountClass: 'allowlisted-extra',
+    },
+  ],
+  skillBackings: [
+    {
+      id: 'ordered-skills',
+      location: { kind: 'state-volume', volumeId: 'ordered-state', subdirectory: '' },
+      skillsSubdirectory: 'skills',
+      conflictDiagnostics: 'silent',
+      templateCopies: 'in-place',
+    },
+  ],
+  skillViews: [
+    {
+      backingId: 'ordered-skills',
+      containerPath: '/workspace/agent/.agents',
+      mode: 'ro',
+      mountClass: 'allowlisted-extra',
+      mount: 'bind',
+    },
+    {
+      backingId: 'ordered-skills',
+      containerPath: '/home/node/.agents',
+      mode: 'ro',
+      mountClass: 'allowlisted-extra',
+      mount: 'bind',
+    },
+  ],
+  files: [],
+  groupInitOperations: [
+    { kind: 'state-volume', id: 'ordered-state' },
+    { kind: 'skill-backing', id: 'ordered-skills', action: 'initialize' },
+  ],
+  spawnOperations: [
+    { kind: 'state-volume', id: 'ordered-state' },
+    { kind: 'project-document' },
+    { kind: 'skill-backing', id: 'ordered-skills', action: 'sync' },
+    { kind: 'legacy-overlay' },
+  ],
+  environment: 'none',
+  legacyHostAdapter: 'optional',
+  commands: { nativeAdmin: [], nativeFiltered: [] },
+});
+
+registerProviderHostContract('partial-install-provider', {
+  stateVolumes: [],
+  skillBackings: [],
+  skillViews: [],
+  files: [],
+  groupInitOperations: [],
+  spawnOperations: [{ kind: 'legacy-overlay' }],
+  environment: 'legacy-overlay',
+  legacyHostAdapter: 'required',
+  commands: { nativeAdmin: [], nativeFiltered: [] },
+});
 
 function group(id: string, folder: string): AgentGroup {
   return { id, name: folder, folder, agent_provider: null, created_at: new Date().toISOString() } as AgentGroup;
@@ -185,7 +283,72 @@ describe('initGroupFilesystem legacy seed isolation', () => {
 });
 
 describe('buildMounts agent surfaces', () => {
-  it('mounts the default surfaces for an unregistered provider (today’s behavior)', async () => {
+  it('fails fast when a declared provider requires a missing legacy adapter', async () => {
+    const ag = group('ag-partial-install', 'partial-install');
+    await expect(
+      resolveProviderContribution(session('partial-session', ag.id), ag, {
+        ...containerConfig(),
+        provider: 'partial-install-provider',
+      }),
+    ).rejects.toThrow("Provider 'partial-install-provider' host contract requires a legacy host adapter");
+  });
+
+  it('runs an undeclared old payload exactly once on new core', async () => {
+    const ag = group('ag-old-payload', 'old-payload');
+    const sess = session('old-session', ag.id);
+    const resolved = await resolveProviderContribution(sess, ag, {
+      ...containerConfig(),
+      provider: 'old-payload-provider',
+    });
+
+    expect(oldPayloadContribution).toHaveBeenCalledOnce();
+    expect(resolved).toMatchObject({
+      provider: 'old-payload-provider',
+      contribution: { env: { COMPAT: 'legacy' } },
+    });
+    expect(resolved.surfaces).toBeUndefined();
+  });
+
+  it('realizes declared Claude surfaces identically to the legacy default path', async () => {
+    const declared = group('ag-declared-claude', 'declared-claude');
+    const legacy = group('ag-legacy-default', 'legacy-default');
+    await createAgentGroup(declared);
+    await createAgentGroup(legacy);
+    await ensureContainerConfig(declared.id);
+    await ensureContainerConfig(legacy.id);
+    await initGroupFilesystem(declared, { provider: 'claude' });
+    await initGroupFilesystem(legacy, { provider: 'not-registered' });
+
+    const config = { ...containerConfig(), skills: ['welcome'] };
+    const declaredMounts = await buildMounts(declared, session('declared-session', declared.id), config, 'claude', {});
+    const legacyMounts = await buildMounts(legacy, session('legacy-session', legacy.id), config, 'not-registered', {});
+    const normalize = (value: string): string =>
+      value
+        .replaceAll(declared.id, '<group>')
+        .replaceAll(legacy.id, '<group>')
+        .replaceAll(declared.folder, '<folder>')
+        .replaceAll(legacy.folder, '<folder>')
+        .replaceAll('declared-session', '<session>')
+        .replaceAll('legacy-session', '<session>');
+    const normalizeMounts = (mounts: typeof declaredMounts) =>
+      mounts.map((mount) => ({ ...mount, hostPath: normalize(mount.hostPath), scope: normalize(mount.scope ?? '') }));
+
+    expect(normalizeMounts(declaredMounts)).toEqual(normalizeMounts(legacyMounts));
+    expect(fs.readFileSync(path.join(GROUPS_DIR, declared.folder, 'CLAUDE.md'), 'utf-8')).toBe(
+      fs.readFileSync(path.join(GROUPS_DIR, legacy.folder, 'CLAUDE.md'), 'utf-8'),
+    );
+
+    for (const ag of [declared, legacy]) {
+      const state = path.join(DATA_DIR, 'v2-sessions', ag.id, '.claude-shared');
+      expect(fs.readFileSync(path.join(state, 'settings.json'), 'utf-8')).toBe(
+        fs.readFileSync(path.join(DATA_DIR, 'v2-sessions', declared.id, '.claude-shared', 'settings.json'), 'utf-8'),
+      );
+      expect(fs.lstatSync(path.join(state, 'skills', 'welcome')).isSymbolicLink()).toBe(true);
+      expect(fs.readlinkSync(path.join(state, 'skills', 'welcome'))).toBe('/app/skills/welcome');
+    }
+  });
+
+  it('materializes the Claude surface access contract', async () => {
     const ag = group('ag-mounts-default', 'mounts-default');
     await createAgentGroup(ag);
     await ensureContainerConfig(ag.id);
@@ -194,8 +357,19 @@ describe('buildMounts agent surfaces', () => {
     const mounts = await buildMounts(ag, session('s1', ag.id), containerConfig(), 'claude', {});
 
     const byContainerPath = new Map(mounts.map((m) => [m.containerPath, m]));
-    expect(byContainerPath.has('/home/node/.claude')).toBe(true);
-    expect(byContainerPath.has('/workspace/agent/CLAUDE.md')).toBe(true);
+    expect(byContainerPath.get('/workspace/agent/CLAUDE.md')).toMatchObject({
+      hostPath: path.join(GROUPS_DIR, ag.folder, 'CLAUDE.md'),
+      readonly: true,
+    });
+    expect(byContainerPath.get('/home/node/.claude')).toMatchObject({
+      hostPath: path.join(DATA_DIR, 'v2-sessions', ag.id, '.claude-shared'),
+      readonly: false,
+    });
+    expect(
+      mounts
+        .filter((mount) => ['/workspace/agent/CLAUDE.md', '/home/node/.claude'].includes(mount.containerPath))
+        .map((mount) => mount.containerPath),
+    ).toEqual(['/workspace/agent/CLAUDE.md', '/home/node/.claude']);
     // Composer ran: the generated project doc exists on disk.
     expect(fs.existsSync(path.join(GROUPS_DIR, ag.folder, 'CLAUDE.md'))).toBe(true);
   });
@@ -215,13 +389,9 @@ describe('buildMounts agent surfaces', () => {
         },
       ],
     };
-    const mounts = await buildMounts(
-      ag,
-      session('s2', ag.id),
-      containerConfig(),
-      'surfaces-test-provider',
-      contributed,
-    );
+    const config = containerConfig();
+    config.additionalMounts = [{ hostPath: path.join(GROUPS_DIR, ag.folder), containerPath: 'operator' }];
+    const mounts = await buildMounts(ag, session('s2', ag.id), config, 'surfaces-test-provider', contributed);
 
     const containerPaths = mounts.map((m) => m.containerPath);
     expect(containerPaths).not.toContain('/home/node/.claude');
@@ -233,5 +403,232 @@ describe('buildMounts agent surfaces', () => {
     expect(containerPaths).toContain('/workspace/agent');
     expect(containerPaths).toContain('/app/src');
     expect(containerPaths).toContain('/workspace/agent/OWN-DOC.md');
+    expect(containerPaths.slice(-2)).toEqual(['/workspace/extra/operator', '/workspace/agent/OWN-DOC.md']);
+  });
+
+  it('keeps declared allowlisted surfaces at the former provider slot in spawn-operation order', async () => {
+    const ag = group('ag-ordered-mounts', 'ordered-mounts');
+    await createAgentGroup(ag);
+    await initGroupFilesystem(ag, { provider: 'ordered-mount-provider' });
+
+    const config = containerConfig();
+    config.additionalMounts = [{ hostPath: path.join(GROUPS_DIR, ag.folder), containerPath: 'operator' }];
+    const sess = session('ordered-mount-session', ag.id);
+    const resolved = await resolveProviderContribution(sess, ag, {
+      ...config,
+      provider: 'ordered-mount-provider',
+    });
+    const mounts = await buildMounts(ag, sess, config, resolved.provider, resolved.contribution, resolved.surfaces);
+
+    const containerPaths = mounts.map((mount) => mount.containerPath);
+    expect(resolved.contribution).toEqual({ env: { COMPAT: 'current' } });
+    expect(currentPayloadContribution).toHaveBeenCalledWith(
+      expect.objectContaining({ coreOwnsProviderSurfaces: true }),
+    );
+    expect(new Set(containerPaths).size).toBe(containerPaths.length);
+    expect(containerPaths).toEqual([
+      '/workspace',
+      '/app/.nanoclaw-session.json',
+      '/workspace/agent',
+      '/workspace/agent/plugins',
+      '/app/src',
+      '/app/skills',
+      '/workspace/extra/operator',
+      '/home/node/.codex',
+      '/workspace/agent/AGENTS.md',
+      '/workspace/agent/.agents',
+      '/home/node/.agents',
+    ]);
+  });
+});
+
+describe('ordered provider spawn operations', () => {
+  function backingContract(backing?: ProviderHostContract['skillBackings'][number]): ProviderHostContract {
+    return {
+      stateVolumes: [],
+      skillBackings: backing ? [backing] : [],
+      skillViews: [],
+      files: [],
+      groupInitOperations: [],
+      spawnOperations: [
+        ...(backing ? [{ kind: 'skill-backing' as const, id: backing.id, action: 'sync' as const }] : []),
+        { kind: 'legacy-overlay' },
+      ],
+      environment: 'none',
+      legacyHostAdapter: 'optional',
+      commands: { nativeAdmin: [], nativeFiltered: [] },
+    };
+  }
+
+  it('stops at the failing operation and leaves only earlier state', async () => {
+    const contract: ProviderHostContract = {
+      projectDocument: {
+        fileName: 'AGENTS.md',
+        baseDocumentFile: 'AGENTS.md',
+        containerPath: '/workspace/agent/AGENTS.md',
+        mountClass: 'group-state',
+      },
+      stateVolumes: [
+        {
+          id: 'state',
+          directory: '.state',
+          containerPath: '/state',
+          scope: 'session',
+          mode: 'rw',
+          mountClass: 'group-state',
+        },
+      ],
+      skillBackings: [
+        {
+          id: 'skills',
+          location: { kind: 'group-directory', directory: '.agents', subdirectory: '' },
+          skillsSubdirectory: 'skills',
+          conflictDiagnostics: 'silent',
+          templateCopies: 'in-place',
+        },
+      ],
+      skillViews: [],
+      files: [
+        {
+          id: 'auth',
+          volumeId: 'state',
+          relativePath: 'auth.json',
+          prepare: { operation: 'append-open-close', when: 'every-spawn', mode: 'process-default' },
+          contentOwner: 'gateway',
+        },
+      ],
+      groupInitOperations: [],
+      spawnOperations: [
+        { kind: 'state-volume', id: 'state' },
+        { kind: 'prepared-file', id: 'auth' },
+        { kind: 'project-document' },
+        { kind: 'skill-backing', id: 'skills', action: 'sync' },
+        { kind: 'legacy-overlay' },
+      ],
+      environment: 'none',
+      legacyHostAdapter: 'required',
+      commands: { nativeAdmin: [], nativeFiltered: [] },
+    };
+    const groupDir = path.join(GROUPS_DIR, 'ordered-group');
+    const sessionDirectory = path.join(DATA_DIR, 'v2-sessions', 'ordered-session');
+    const legacyOverlay = vi.fn(async () => ({}));
+
+    await expect(
+      realizeProviderSpawnSurfaces('ordered', contract, 'ordered-group', groupDir, sessionDirectory, [], {
+        legacyOverlay,
+        composeProjectDocument: async () => {
+          throw new Error('compose failed');
+        },
+      }),
+    ).rejects.toThrow('compose failed');
+
+    expect(fs.existsSync(path.join(sessionDirectory, '.state', 'auth.json'))).toBe(true);
+    expect(fs.existsSync(path.join(groupDir, '.agents', 'skills'))).toBe(false);
+    expect(legacyOverlay).not.toHaveBeenCalled();
+  });
+
+  it('ignores declared legacy callback mounts while retaining env', async () => {
+    const realized = await realizeProviderSpawnSurfaces(
+      'declared',
+      backingContract(),
+      'group',
+      GROUPS_DIR,
+      DATA_DIR,
+      [],
+      {
+        legacyOverlay: async () => ({
+          env: { COMPAT: 'yes' },
+          mounts: [{ hostPath: GROUPS_DIR, containerPath: '/legacy', readonly: true }],
+        }),
+        composeProjectDocument: async () => {},
+      },
+    );
+    expect(realized.contribution).toEqual({ env: { COMPAT: 'yes' } });
+  });
+
+  it('contains raw contract paths if registration validation is bypassed', async () => {
+    const contract = backingContract({
+      id: 'skills',
+      location: { kind: 'group-directory', directory: '.agents', subdirectory: '../../escape' },
+      skillsSubdirectory: 'skills',
+      conflictDiagnostics: 'silent',
+      templateCopies: 'in-place',
+    });
+
+    await expect(
+      realizeProviderSpawnSurfaces('raw', contract, 'group', path.join(TEST_ROOT, 'safe'), DATA_DIR, [], {
+        legacyOverlay: async () => ({}),
+        composeProjectDocument: async () => {},
+      }),
+    ).rejects.toThrow(/escapes its resolved root/);
+  });
+
+  it.each([
+    ['warn', true],
+    ['silent', false],
+  ] as const)('%s conflict diagnostics control shared-link warnings', async (policy, expectedWarning) => {
+    const groupDir = path.join(TEST_ROOT, `conflict-${policy}`);
+    fs.mkdirSync(path.join(groupDir, '.agents', 'skills', 'welcome'), { recursive: true });
+    const contract = backingContract({
+      id: 'skills',
+      location: { kind: 'group-directory', directory: '.agents', subdirectory: '' },
+      skillsSubdirectory: 'skills',
+      sharedLinks: { prune: 'symlinks-only' },
+      conflictDiagnostics: policy,
+      templateCopies: 'in-place',
+    });
+
+    await realizeProviderSpawnSurfaces('conflict', contract, 'group', groupDir, DATA_DIR, ['welcome'], {
+      legacyOverlay: async () => ({}),
+      composeProjectDocument: async () => {},
+    });
+
+    expect(log.warn).toHaveBeenCalledTimes(expectedWarning ? 1 : 0);
+    vi.mocked(log.warn).mockClear();
+  });
+
+  it('labels reconciliation from the transformer provider', () => {
+    const contract: ProviderHostContract = {
+      ...backingContract(),
+      stateVolumes: [
+        {
+          id: 'state',
+          directory: '.diagnostic-state',
+          containerPath: '/state',
+          scope: 'group',
+          mode: 'rw',
+          mountClass: 'group-state',
+        },
+      ],
+      files: [
+        {
+          id: 'settings',
+          volumeId: 'state',
+          relativePath: 'settings.json',
+          prepare: {
+            operation: 'create-if-missing',
+            when: 'group-init',
+            content: '{"old":true}\n',
+            mode: 'process-default',
+          },
+          contentOwner: 'provider',
+          reconcile: {
+            transform: diagnosticSourceTransformer,
+            transformerProvider: 'diagnostic-source',
+            when: 'group-init',
+            write: 'atomic-replace',
+          },
+        },
+      ],
+      groupInitOperations: [
+        { kind: 'state-volume', id: 'state' },
+        { kind: 'prepared-file', id: 'settings' },
+      ],
+    };
+
+    initializeProviderGroupSurfaces('consumer', contract, 'diagnostic-group', GROUPS_DIR);
+    expect(initializeProviderGroupSurfaces('consumer', contract, 'diagnostic-group', GROUPS_DIR)).toContain(
+      'settings.json (reconciled Diagnostic-source settings)',
+    );
   });
 });

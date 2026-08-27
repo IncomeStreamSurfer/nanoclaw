@@ -132,6 +132,15 @@ describe('host module lifecycle registry', () => {
 });
 
 describe('host lifecycle orchestration', () => {
+  it('arms restart backoff before validating provider host conformance', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'index.ts'), 'utf8');
+    const conformance = source.indexOf('assertProviderHostConformance()');
+    const backoff = source.indexOf('await enforceStartupBackoff()');
+
+    expect(conformance).toBeGreaterThan(-1);
+    expect(conformance).toBeGreaterThan(backoff);
+  });
+
   it('starts after delivery is ready and before delivery polling', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'index.ts'), 'utf8');
     const deliveryReady = source.indexOf('setDeliveryAdapter(createChannelDeliveryAdapter())');
