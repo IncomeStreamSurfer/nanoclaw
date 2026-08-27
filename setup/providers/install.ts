@@ -39,6 +39,7 @@ function isFlowOwnedCommand(cmd: string): boolean {
     /container\/build\.sh/.test(cmd) ||
     /\bvitest\b/.test(cmd) ||
     /\bbun\s+test\b/.test(cmd) ||
+    /provider-contract-verifier/.test(cmd) ||
     // The skill's auth step re-invokes `--step provider-auth` — running it from
     // inside the install would recurse. The flow runs runAuth itself.
     /provider-auth/.test(cmd)

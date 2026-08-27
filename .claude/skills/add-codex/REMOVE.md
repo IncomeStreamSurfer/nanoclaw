@@ -18,8 +18,11 @@ ncl groups restart --id <group-id>
 Delete (do not comment out) the `import './codex.js';` line from each of:
 
 - `src/providers/index.ts`
+- `src/provider-contracts/index.ts`
 - `container/agent-runner/src/providers/index.ts`
+- `container/agent-runner/src/provider-contracts/index.ts`
 - `setup/providers/index.ts`
+- `setup/provider-contracts/index.ts`
 
 ## 3. Delete every copied file
 
@@ -29,6 +32,7 @@ rm -f src/providers/codex.ts \
       src/providers/codex-registration.test.ts \
       src/providers/codex-host-contribution.test.ts \
       src/providers/codex-agents-md.test.ts \
+      src/provider-contracts/codex.ts \
       container/agent-runner/src/providers/codex.ts \
       container/agent-runner/src/providers/codex-app-server.ts \
       container/agent-runner/src/providers/exchange-archive.ts \
@@ -38,9 +42,11 @@ rm -f src/providers/codex.ts \
       container/agent-runner/src/providers/codex.turns.test.ts \
       container/agent-runner/src/providers/codex-app-server.test.ts \
       container/agent-runner/src/providers/codex-cli-tools.test.ts \
+      container/agent-runner/src/provider-contracts/codex.ts \
       setup/providers/codex.ts \
       setup/providers/codex.test.ts \
-      setup/providers/codex-registration.test.ts
+      setup/providers/codex-registration.test.ts \
+      setup/provider-contracts/codex.ts
 ```
 
 This skill itself (`.claude/skills/add-codex/`) stays — it ships with trunk so the provider can be re-added later.

@@ -15,19 +15,14 @@
 import { buildContainerImage } from './lib/container-build.js';
 import { getSetupProvider, listSetupProviders } from './providers/registry.js';
 import { applyProviderSkill } from './providers/install.js';
+import { getInstallableProviderDescriptor } from './providers/skill-descriptor.js';
 // Provider payloads self-register on import.
 import './providers/index.js';
-
-// Hard-wired install skills — the audited control surface (no branch
-// enumeration). Each `/add-<name>` SKILL.md is idempotent and self-skips when
-// the payload is already wired; it is applied in-process via the directive
-// engine (no shell-out to a drift-prone setup/add-<name>.sh). Codex is the only
-// manifest-style provider today.
-const INSTALL_SKILLS: Record<string, string> = {
-  codex: '.claude/skills/add-codex',
-};
+import './provider-contracts/index.js';
+import { assertSetupProviderConformance } from './provider-contracts/registry.js';
 
 export async function run(args: string[]): Promise<void> {
+  assertSetupProviderConformance();
   const name = args[0]?.trim().toLowerCase();
   const withAuth = listSetupProviders().filter((entry) => entry.runAuth);
 
@@ -40,7 +35,7 @@ export async function run(args: string[]): Promise<void> {
   }
 
   let entry = getSetupProvider(name);
-  const skillDir = INSTALL_SKILLS[name];
+  const skillDir = getInstallableProviderDescriptor(name)?.skillDir;
   if (skillDir) {
     // Install OR refresh: the skill is idempotent and is also the upgrade path
     // — payload files resync and a bumped CLI-manifest pin replaces the local
@@ -67,6 +62,8 @@ export async function run(args: string[]): Promise<void> {
     }
     if (!entry) {
       await import(`./providers/${name}.js`);
+      await import(`./provider-contracts/${name}.js`);
+      assertSetupProviderConformance();
       entry = getSetupProvider(name);
     }
     if (!entry) {
