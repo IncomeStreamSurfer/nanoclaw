@@ -48,14 +48,18 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - run: pnpm install --frozen-lockfile
         working-directory: core
-      # This layer carries only the codex payload; the opencode layer above it
-      # restores the combined-providers coverage once its files exist.
       - name: Install, refresh, and verify provider head
         working-directory: core
         env:
           REGISTRY_CHANNELS_SHA: ${{ env.COMPATIBLE_CHANNELS_SHA }}
           REGISTRY_PROVIDERS_SHA: ${{ steps.provider.outputs.sha }}
-        run: pnpm exec tsx scripts/test-registry-skills.ts --all add-codex
+        run: pnpm exec tsx scripts/test-registry-skills.ts --combined-providers
+      - name: Verify provider add, remove, and reapply
+        working-directory: core
+        env:
+          REGISTRY_CHANNELS_SHA: ${{ env.COMPATIBLE_CHANNELS_SHA }}
+          REGISTRY_PROVIDERS_SHA: ${{ steps.provider.outputs.sha }}
+        run: pnpm exec tsx scripts/test-registry-skills.ts --all add-codex add-opencode
       - name: Verify old provider refresh
         working-directory: core
         env:

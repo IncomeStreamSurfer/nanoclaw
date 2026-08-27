@@ -14,6 +14,8 @@ import { registerProvider } from './provider-registry.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderOptions, QueryInput } from './types.js';
 import { mcpServersToOpenCodeConfig } from './mcp-to-opencode.js';
 import { getAllDestinations } from '../destinations.js';
+import { buildPostCompactionReminder as buildCoreReminder } from '../compact-instructions.js';
+import { getTaskSeriesId } from '../db/session-routing.js';
 
 function log(msg: string): void {
   console.error(`[opencode-provider] ${msg}`);
@@ -239,16 +241,31 @@ function parseLimitEnv(varName: string, raw: string | undefined): number | undef
   return Number(trimmed);
 }
 
-export function buildOpenCodeConfig(options: ProviderOptions): Record<string, unknown> {
-  const provider = process.env.OPENCODE_PROVIDER || 'anthropic';
-  const model = process.env.OPENCODE_MODEL;
-  const smallModel = process.env.OPENCODE_SMALL_MODEL;
-  // Reasoning effort from the group's container config (ncl groups config
-  // update --effort). OpenCode forwards a free-form per-model `options` object
-  // to the ai-sdk provider, which maps reasoningEffort onto reasoning_effort in
-  // the request body.
-  const effort = options.effort;
-  const proxyUrl = process.env.ANTHROPIC_BASE_URL;
+/** The inference-selection fragment of the OpenCode config, derived purely from the core input and environment. */
+export interface OpenCodeInferenceConfig {
+  model?: string;
+  smallModel?: string;
+  enabledProviders: string[];
+  providerOptions: Record<string, unknown>;
+}
+
+/**
+ * Inference selection: which provider/model OpenCode talks to and how hard it
+ * reasons. Model identity comes from the OPENCODE_* environment the host
+ * provisions; reasoning effort comes from the group's container config (ncl
+ * groups config update --effort — the core `inference` input). OpenCode
+ * forwards a free-form per-model `options` object to the ai-sdk provider,
+ * which maps reasoningEffort onto reasoning_effort in the request body.
+ */
+export function resolveOpenCodeInference(
+  input: { model?: string; effort?: string },
+  environment: NodeJS.ProcessEnv,
+): OpenCodeInferenceConfig {
+  const provider = environment.OPENCODE_PROVIDER || 'anthropic';
+  const model = environment.OPENCODE_MODEL;
+  const smallModel = environment.OPENCODE_SMALL_MODEL;
+  const effort = input.effort;
+  const proxyUrl = environment.ANTHROPIC_BASE_URL;
 
   const providerModelId = model ? model.replace(new RegExp(`^${provider}/`), '') : undefined;
   const providerSmallModelId = smallModel ? smallModel.replace(new RegExp(`^${provider}/`), '') : undefined;
@@ -260,8 +277,8 @@ export function buildOpenCodeConfig(options: ProviderOptions): Record<string, un
   // Undeclared custom models resolve limit.context to 0, which silently disables
   // compaction and kills long sessions against a fixed-window backend (e.g. vLLM).
   // Absent these env vars, behavior is unchanged (no `limit` key emitted).
-  const contextLimitEnv = process.env.OPENCODE_MODEL_CONTEXT_LIMIT;
-  const outputLimitEnv = process.env.OPENCODE_MODEL_OUTPUT_LIMIT;
+  const contextLimitEnv = environment.OPENCODE_MODEL_CONTEXT_LIMIT;
+  const outputLimitEnv = environment.OPENCODE_MODEL_OUTPUT_LIMIT;
   const contextLimit = parseLimitEnv('OPENCODE_MODEL_CONTEXT_LIMIT', contextLimitEnv);
   const outputLimit = parseLimitEnv('OPENCODE_MODEL_OUTPUT_LIMIT', outputLimitEnv);
   if (outputLimitEnv !== undefined && contextLimit === undefined) {
@@ -284,7 +301,7 @@ export function buildOpenCodeConfig(options: ProviderOptions): Record<string, un
   // `attachment` is a registry/UI flag rather than a pipeline gate, but it is
   // set alongside so the entry stays internally consistent.
   // Absent this env var, behavior is unchanged (no capability keys emitted).
-  const modalityEnv = process.env.OPENCODE_MODEL_INPUT_MODALITIES;
+  const modalityEnv = environment.OPENCODE_MODEL_INPUT_MODALITIES;
   const requestedModalities = (modalityEnv ?? '')
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
@@ -346,43 +363,35 @@ export function buildOpenCodeConfig(options: ProviderOptions): Record<string, un
           },
         };
 
-  const mcp = mcpServersToOpenCodeConfig(options.mcpServers);
+  return { model, smallModel, enabledProviders: [provider], providerOptions };
+}
 
-  // Named explicitly rather than left to the cwd walk: OpenCode takes the
-  // FIRST of AGENTS.md, CLAUDE.md, CONTEXT.md it finds and stops, so a stale
-  // AGENTS.md from a group that once ran codex would shadow the document the
-  // host just composed. Listed here it loads either way (resolved paths
-  // dedupe against the walk). CLAUDE.local.md is in no walk target list, so
-  // this array is the group memory file's only channel.
-  //
-  // Memory deliberately does NOT ride this array. OpenCode's instruction
-  // pipeline calls instruction.system() on every model request and rereads
-  // each file raw, so memory files listed here would be re-read (uncapped,
-  // unrendered) on every request instead of following the shared
-  // startup/clear/compact lifecycle. Memory is delivered by the registered
-  // memory session hook instead — see createMemoryLifecycle below.
-  const instructions = [`${AGENT_DIR}/CLAUDE.md`, `${AGENT_DIR}/CLAUDE.local.md`];
-
+/**
+ * Execution policy: the container is the security boundary, so every tool
+ * category OpenCode knows stays allowed — except `question`.
+ *
+ * A flat `permission: 'allow'` string leaves every category — including
+ * `question`, OpenCode's built-in interactive multi-choice tool — to
+ * whatever OpenCode's own default/merge resolves it to. Server logs from
+ * a live session showed that resolution land on BOTH `question -> deny *`
+ * and `question -> allow *` for the same session: internally
+ * contradictory, and whichever rule wins last, `allow` sometimes does —
+ * and a headless container has no human to answer an interactive
+ * question, so any path that lets it fire wedges the session forever
+ * (see OpenCodeProvider's question.asked handling below for the runtime
+ * belt-and-suspenders). Enumerate every known permission category
+ * explicitly instead of relying on the wildcard string, so `question`
+ * resolves to a single deterministic value — `deny` — that can never
+ * contradict itself, while every other category keeps the prior
+ * "allow everything" behavior.
+ * A category OpenCode adds after this list was written is absent from it,
+ * and so resolves to OpenCode's own default rather than to `allow`.
+ */
+export function resolveOpenCodeExecutionPolicy(
+  _input: undefined,
+  _environment: NodeJS.ProcessEnv,
+): { permission: Record<string, string>; autoupdate: false; snapshot: false } {
   return {
-    ...(model ? { model } : {}),
-    ...(smallModel ? { small_model: smallModel } : {}),
-    enabled_providers: [provider],
-    // A flat `permission: 'allow'` string leaves every category — including
-    // `question`, OpenCode's built-in interactive multi-choice tool — to
-    // whatever OpenCode's own default/merge resolves it to. Server logs from
-    // a live session showed that resolution land on BOTH `question -> deny *`
-    // and `question -> allow *` for the same session: internally
-    // contradictory, and whichever rule wins last, `allow` sometimes does —
-    // and a headless container has no human to answer an interactive
-    // question, so any path that lets it fire wedges the session forever
-    // (see OpenCodeProvider's question.asked handling below for the runtime
-    // belt-and-suspenders). Enumerate every known permission category
-    // explicitly instead of relying on the wildcard string, so `question`
-    // resolves to a single deterministic value — `deny` — that can never
-    // contradict itself, while every other category keeps the prior
-    // "allow everything" behavior.
-    // A category OpenCode adds after this list was written is absent from it,
-    // and so resolves to OpenCode's own default rather than to `allow`.
     permission: {
       read: 'allow',
       edit: 'allow',
@@ -403,7 +412,48 @@ export function buildOpenCodeConfig(options: ProviderOptions): Record<string, un
     },
     autoupdate: false,
     snapshot: false,
-    provider: providerOptions,
+  };
+}
+
+/** MCP wiring: NanoClaw's server map translated into OpenCode's local/remote MCP entries. */
+export function resolveOpenCodeMcpServers(
+  input: ProviderOptions['mcpServers'],
+  _environment: NodeJS.ProcessEnv,
+): { mcp: ReturnType<typeof mcpServersToOpenCodeConfig> } {
+  return { mcp: mcpServersToOpenCodeConfig(input) };
+}
+
+export function buildOpenCodeConfig(
+  options: ProviderOptions,
+  environment: NodeJS.ProcessEnv = process.env,
+): Record<string, unknown> {
+  const inference = resolveOpenCodeInference({ model: options.model, effort: options.effort }, environment);
+  const policy = resolveOpenCodeExecutionPolicy(undefined, environment);
+  const { mcp } = resolveOpenCodeMcpServers(options.mcpServers, environment);
+
+  // Named explicitly rather than left to the cwd walk: OpenCode takes the
+  // FIRST of AGENTS.md, CLAUDE.md, CONTEXT.md it finds and stops, so a stale
+  // AGENTS.md from a group that once ran codex would shadow the document the
+  // host just composed. Listed here it loads either way (resolved paths
+  // dedupe against the walk). CLAUDE.local.md is in no walk target list, so
+  // this array is the group memory file's only channel.
+  //
+  // Memory deliberately does NOT ride this array. OpenCode's instruction
+  // pipeline calls instruction.system() on every model request and rereads
+  // each file raw, so memory files listed here would be re-read (uncapped,
+  // unrendered) on every request instead of following the shared
+  // startup/clear/compact lifecycle. Memory is delivered by the registered
+  // memory session hook instead — see createMemoryLifecycle below.
+  const instructions = [`${AGENT_DIR}/CLAUDE.md`, `${AGENT_DIR}/CLAUDE.local.md`];
+
+  return {
+    ...(inference.model ? { model: inference.model } : {}),
+    ...(inference.smallModel ? { small_model: inference.smallModel } : {}),
+    enabled_providers: inference.enabledProviders,
+    permission: policy.permission,
+    autoupdate: policy.autoupdate,
+    snapshot: policy.snapshot,
+    provider: inference.providerOptions,
     instructions,
     mcp,
   };
@@ -499,32 +549,19 @@ export const QUESTION_STEERING_TEXT =
 /**
  * Routing-discipline reminder injected on the first prompt AFTER OpenCode
  * auto-compacts the active session. Compaction rewrites the transcript into a
- * summary, and the delivery contract — every reply that should reach a human
- * must be wrapped in <message to="name">…</message> blocks, which the poll-loop
- * enforces when it dispatches the agent's final text — is exactly the kind of
- * standing instruction a summary can quietly drop. Once it is gone, replies
- * stop reaching anyone. Re-state it, with the live destination list, so the
- * next turn routes correctly.
+ * summary, which can quietly drop the delivery discipline; once it is gone,
+ * replies stop reaching anyone.
  *
  * OpenCode 1.4.11 (the pinned SDK) exposes no compaction-prompt /
  * customInstructions API — the Config type has no such key and session
  * summarization takes only providerID + modelID — so unlike the Claude
  * provider's PreCompact hook we cannot steer the summary itself. We re-inject
- * on the next prompt instead. Destinations are read fresh at injection time.
- *
- * NB: on this providers branch there is no shared buildCompactInstructions()
- * helper to reuse (it and the task-series model it depends on land far ahead on
- * main), so this reminder states the branch's own <message to> discipline
- * rather than importing text that does not exist here.
+ * on the next prompt instead. The wording is core's canon
+ * (`compact-instructions.ts`) — this provider only supplies the live
+ * destination list and task context, read fresh at injection time.
  */
 export function buildPostCompactionReminder(names: string[] = getAllDestinations().map((d) => d.name)): string {
-  const list = names.length > 0 ? names.map((n) => `\`${n}\``).join(', ') : '(none)';
-  return (
-    '<system>The conversation was just compacted into a summary. Routing instructions can be lost in ' +
-    'that summary, so as a reminder: wrap every reply you want delivered in ' +
-    '<message to="name">…</message> blocks — text outside such blocks is treated as scratchpad and is ' +
-    `NOT sent. Available destinations: ${list}.</system>`
-  );
+  return buildCoreReminder(names, getTaskSeriesId());
 }
 
 /**
@@ -585,6 +622,28 @@ export type OpenCodeMemorySource = 'startup' | 'compact';
 const MEMORY_HOOK_TIMEOUT_MS = 10_000;
 
 /**
+ * Decide how (and whether) the registered memory session hook runs at one
+ * lifecycle point. Pure: this is the memory capability the runtime contract
+ * declares, and `runMemorySessionHook` executes exactly what it plans.
+ */
+export function planMemorySessionHookRun(
+  hook: OpenCodeMemorySessionHook | undefined,
+  source: OpenCodeMemorySource,
+): { run: { command: string; input: string; timeoutMs: number } } | { skip: string } {
+  if (!hook) return { skip: `No memory session hook registered; skipping ${source} memory injection` };
+  if (!hook.sources.includes(source)) {
+    return { skip: `Memory session hook does not declare source ${source}; skipping injection` };
+  }
+  return {
+    run: {
+      command: hook.command,
+      input: JSON.stringify({ hook_event_name: 'SessionStart', source }),
+      timeoutMs: MEMORY_HOOK_TIMEOUT_MS,
+    },
+  };
+}
+
+/**
  * Run the registered memory session hook and return what it printed.
  *
  * The hook reads a Claude-style SessionStart payload on stdin and prints the
@@ -600,21 +659,18 @@ export function runMemorySessionHook(
   hook: OpenCodeMemorySessionHook | undefined,
   source: OpenCodeMemorySource,
 ): string | undefined {
-  if (!hook) {
-    log(`No memory session hook registered; skipping ${source} memory injection`);
-    return undefined;
-  }
-  if (!hook.sources.includes(source)) {
-    log(`Memory session hook does not declare source ${source}; skipping injection`);
+  const plan = planMemorySessionHookRun(hook, source);
+  if ('skip' in plan) {
+    log(plan.skip);
     return undefined;
   }
 
   try {
-    const res = spawnSync(hook.command, {
+    const res = spawnSync(plan.run.command, {
       shell: true,
-      input: JSON.stringify({ hook_event_name: 'SessionStart', source }),
+      input: plan.run.input,
       encoding: 'utf-8',
-      timeout: MEMORY_HOOK_TIMEOUT_MS,
+      timeout: plan.run.timeoutMs,
     });
     if (res.error || res.status !== 0) {
       const why = res.error ? res.error.message : `exit ${String(res.status)}`;
