@@ -299,16 +299,28 @@
   <div class="dlg-f"><div style="margin-left:auto"><button onclick="dlgSkills.close()">Close</button></div></div>
 </dialog>
 
+<dialog id="dlgPick">
+  <div class="dlg-h"><h3>Choose a folder</h3>
+    <div class="muted" style="margin-top:5px" id="pkPath"></div></div>
+  <div class="dlg-b" style="max-height:52vh">
+    <div id="pkList"></div>
+  </div>
+  <div class="dlg-f">
+    <div class="muted" style="font-size:12.5px">The bot gets read and write access to whatever you pick.</div>
+    <div style="margin-left:auto" class="row"><button onclick="dlgPick.close()">Cancel</button><button class="primary" onclick="pickHere()">Use this folder</button></div>
+  </div>
+</dialog>
+
 <dialog id="dlgFolders">
   <div class="dlg-h"><h3>Folders — <span id="foBot"></span></h3>
     <div class="muted" style="margin-top:5px">Folders you mount are the only part of your machine this bot can see. Everything else stays outside its sandbox.</div></div>
   <div class="dlg-b">
     <div id="foList" style="margin-bottom:6px"></div>
     <label>Add a folder</label>
-    <div class="row"><input id="foHost" placeholder="/Users/you/my-project" style="flex:2"><input id="foName" placeholder="name inside the bot (optional)" style="flex:1"></div>
+    <div class="row"><button class="primary" onclick="openPick(async f=>{const r=await api(`/api/agents/${foAgent}/mounts`,f);toast(r.ok?'Folder mounted — bot restarted':'Failed: '+errMsg(r),r.ok);openFolders(foAgent);refresh();})">Choose a folder…</button></div>
     <div id="foNote" class="muted" style="margin-top:10px"></div>
   </div>
-  <div class="dlg-f"><div style="margin-left:auto" class="row"><button onclick="dlgFolders.close()">Close</button><button class="primary" onclick="addFolder(false)">Add folder</button></div></div>
+  <div class="dlg-f"><div style="margin-left:auto" class="row"><button onclick="dlgFolders.close()">Close</button></div></div>
 </dialog>
 
 <dialog id="dlgMission">
@@ -494,8 +506,11 @@ function botRow(g){
     <div class="row">
       <input class="askbox" placeholder="Ask ${esc(g.name)} to do something…" style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')ask('${g.id}',this)">
       <button onclick="ask('${g.id}',this.previousElementSibling)">Ask</button>
+      <button onclick="openMission('${g.id}')">Mission</button>
+      <button onclick="openFolders('${g.id}')">Folders</button>
       <button onclick="openEnv('${g.id}')">Keys</button>
       <button onclick="openSkills('${g.id}')">Skills</button>
+      <button onclick="openSchedule('${g.id}', S.tasks.find(t=>t.agent_group_id==='${g.id}'&&!String(t.series_id||t.id).startsWith('ui-')))">Schedule</button>
       <button onclick="restart('${g.id}')">Restart</button>
       <button class="danger" onclick="delBot('${g.id}')">Delete</button>
     </div>
@@ -636,6 +651,47 @@ function runCard(r){
 }
 
 
+
+
+/* ── folder picker ────────────────────────────────────────────── */
+let pkCur=null, pkOnPick=null;
+async function openPick(cb){ pkOnPick=cb; await pkLoad(''); dlgPick.showModal(); }
+async function pkLoad(p){
+  const r=await api('/api/browse'+(p?`?path=${encodeURIComponent(p)}`:''));
+  const d=r.data; pkCur=d.path;
+  $('pkPath').innerHTML=`<span class="mono">${esc(d.path)}</span>`;
+  $('pkList').innerHTML=(d.parent?`<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="pkLoad('${esc(d.parent)}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+      <span class="muted">up one level</span></div>`:'')
+    +(d.dirs.length?d.dirs.map(x=>`<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="pkLoad('${esc(x.path)}')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      <span>${esc(x.name)}</span></div>`).join(''):'<div class="muted" style="padding:10px 0">No sub-folders here.</div>');
+}
+function pickHere(){ const p=pkCur; dlgPick.close(); if(pkOnPick) pkOnPick({hostPath:p,containerPath:p.split('/').filter(Boolean).pop()}); }
+
+/* ── wizard extras ────────────────────────────────────────────── */
+let wizFolders=[], wizSkills=[];
+function renderWizFolders(){
+  $('bFolders').innerHTML=wizFolders.length?wizFolders.map((f,i)=>`<span class="keychip">${esc(f.hostPath)} <span class="x" onclick="wizFolders.splice(${i},1);renderWizFolders()">×</span></span>`).join(''):'<span class="muted" style="font-size:12.5px">None — it will only see its own workspace.</span>';
+}
+function renderWizSkills(){
+  $('bSkills').innerHTML=wizSkills.length?wizSkills.map((s,i)=>`<span class="keychip">${esc(s.replace('https://github.com/',''))} <span class="x" onclick="wizSkills.splice(${i},1);renderWizSkills()">×</span></span>`).join(''):'';
+}
+function wizSchedChange(){
+  const v=$('bSchedPreset').value;
+  const needsTime=v==='daily'||v==='weekdays';
+  $('bSchedTime').style.display=needsTime?'block':'none';
+  const cron=wizCron();
+  $('bSchedNote').textContent=cron?(nextRuns(cron,1)?`First run ${fmtWhen(nextRuns(cron,1)[0])}`:''):'';
+}
+function wizCron(){
+  const v=$('bSchedPreset').value; if(!v) return '';
+  if(v==='daily'||v==='weekdays'){
+    const [h,m]=($('bSchedTime').value||'09:00').split(':').map(n=>parseInt(n,10));
+    return v==='daily'?`${m} ${h} * * *`:`${m} ${h} * * 1-5`;
+  }
+  return v;
+}
 
 /* ── folders (mounts) + mission ───────────────────────────────── */
 let foAgent=null, miAgent=null;
@@ -897,18 +953,24 @@ function addEnvRow(){const d=document.createElement('div');d.className='envrow';
   d.innerHTML=`<input class="ek" placeholder="KEY"><input class="ev" placeholder="value"><input class="eh" placeholder="api.example.com"><select class="ei" style="display:none"><option value="bearer">Bearer</option><option value="param">Param</option></select>`;
   d.querySelector('.eh').addEventListener('input',e=>d.querySelector('.ei').style.display=e.target.value.trim()?'block':'none');
   $('bEnvRows').appendChild(d);}
-function openWizard(){$('bEnvRows').innerHTML='';addEnvRow();
+function openWizard(){$('bEnvRows').innerHTML='';addEnvRow();wizFolders=[];wizSkills=[];renderWizFolders();renderWizSkills();$('bSchedPreset').value='';wizSchedChange();
   $('agTemplate').innerHTML='<option value="">Blank</option>'+(S?.templates||[]).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
   dlgBot.showModal();}
 async function createBot(){
   const env=[...document.querySelectorAll('#bEnvRows .envrow')].map(r=>({key:r.querySelector('.ek').value.trim(),value:r.querySelector('.ev').value,host:r.querySelector('.eh').value.trim(),inject:r.querySelector('.ei').value})).filter(e=>e.key);
-  const cron=$('bCron').value.trim();
-  const r=await api('/api/bots',{name:$('bName').value.trim(),mission:$('bMission').value.trim(),env,schedule:!!cron,cron,template:$('agTemplate').value||undefined});
+  const cron=wizCron();
+  const per=cron?runsPerDay(cron):0;
+  if(per>4.01&&!confirm(`This runs about ${Math.round(per)} times a day, each spending tokens. Schedule it anyway?`)) return;
+  toast('Creating bot…');
+  const r=await api('/api/bots',{name:$('bName').value.trim(),mission:$('bMission').value.trim(),env,schedule:!!cron,cron,
+    forceSchedule:per>4.01, folders:wizFolders, skills:wizSkills, template:$('agTemplate').value||undefined});
   if(!r.ok)return toast('Failed: '+errMsg(r),false);
   const prov=$('bProvider').value;
   if(prov!=='claude')await api(`/api/agents/${r.data.id}/provider`,{provider:prov});
-  dlgBot.close();$('bName').value='';$('bMission').value='';$('bCron').value='';
-  toast('Bot created — running its first mission');missions={};await refresh();runBot(r.data.id);}
+  dlgBot.close();$('bName').value='';$('bMission').value='';
+  const p=r.data.applied?.problems||[];
+  toast(p.length?`Bot created, but: ${p[0]}`:'Bot created — running its first mission', !p.length);
+  missions={};await refresh();runBot(r.data.id);}
 
 /* keys */
 async function openEnv(id){envAgent=id;$('envBot').textContent=S.groups.find(g=>g.id===id)?.name||'';

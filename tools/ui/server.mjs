@@ -53,6 +53,83 @@ async function vaultListFor(botFolder) {
   return r.data.filter(s => s.name?.startsWith(`${botFolder}:`)).map(s => ({ id: s.id, key: s.name.slice(botFolder.length + 1), host: s.hostPattern }));
 }
 
+
+// Folders an operator should not hand to an agent, however deliberately.
+const HOME = process.env.HOME || '';
+const FORBIDDEN = ['/', '/System', '/Library', '/private', '/etc', '/var', '/usr', '/bin', '/sbin', '/opt', '/Applications',
+  HOME, path.join(HOME, 'Library'), path.join(HOME, '.ssh'), path.join(HOME, '.aws'), path.join(HOME, '.gnupg'),
+  path.join(HOME, '.config'), path.join(HOME, '.docker'), path.join(HOME, '.onecli'), ROOT].map(p => path.resolve(p));
+
+async function mountFolder(agentId, rawPath, containerPath) {
+  if (!rawPath?.trim()) return { ok: false, error: 'Pick a folder first.' };
+  const hostPath = path.resolve(rawPath.replace(/^~/, HOME).trim());
+  if (!fs.existsSync(hostPath) || !fs.statSync(hostPath).isDirectory())
+    return { ok: false, error: `${hostPath} is not a folder on this machine.` };
+  if (FORBIDDEN.includes(hostPath))
+    return { ok: false, error: `${hostPath} is a system or credential folder — pick a project folder instead.` };
+  const cp = (containerPath || path.basename(hostPath)).replace(/[^A-Za-z0-9._-]/g, '-');
+
+  // The allowlist bounds what agents may be given; an operator choosing a
+  // folder here is that decision being made, so widen it to match.
+  const allowPath = path.join(HOME, '.config', 'nanoclaw', 'mount-allowlist.json');
+  let allow; try { allow = JSON.parse(fs.readFileSync(allowPath, 'utf8')); }
+  catch { allow = { allowedRoots: [], blockedPatterns: [], nonMainReadOnly: false }; }
+  allow.allowedRoots = allow.allowedRoots || [];
+  const covered = allow.allowedRoots.some(r => {
+    const rp = path.resolve(r.path);
+    return hostPath === rp || hostPath.startsWith(rp + path.sep);
+  });
+  if (!covered) {
+    allow.allowedRoots.push({ path: hostPath, allowReadWrite: true, description: 'added from the console' });
+    fs.mkdirSync(path.dirname(allowPath), { recursive: true });
+    fs.writeFileSync(allowPath, JSON.stringify(allow, null, 2) + '\n');
+  }
+  const r = await ncl(['groups', 'config', 'add-mount', '--id', agentId, '--host', hostPath, '--container', cp]);
+  if (r.ok) await ncl(['groups', 'restart', '--id', agentId]);
+  return r.ok ? { ok: true, data: { hostPath, containerPath: cp } } : { ok: false, error: String(r.error?.message || r.error) };
+}
+
+
+// Install a skill folder from a public GitHub repo into one bot's overlay.
+async function installSkillFromGithub(agentId, githubUrl) {
+  const m = String(githubUrl).trim().match(/^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/(?:tree|blob)\/([\w.\/-]+))?\/?$/);
+  if (!m) return { ok: false, error: 'not a github.com repository URL' };
+  const [, owner, repo, ref] = m;
+  const overlay = path.join(ROOT, 'data', 'v2-sessions', agentId, '.claude-shared', 'skills');
+  const tmp = fs.mkdtempSync(path.join(ROOT, 'data', 'skill-dl-'));
+  try {
+    const tarUrl = `https://codeload.github.com/${owner}/${repo}/tar.gz/${ref ? encodeURIComponent(ref.split('/')[0]) : 'HEAD'}`;
+    const resp = await fetch(tarUrl);
+    if (!resp.ok) return { ok: false, error: `GitHub fetch failed (${resp.status}) — is the repo public?` };
+    fs.writeFileSync(path.join(tmp, 'skill.tgz'), Buffer.from(await resp.arrayBuffer()));
+    await new Promise((res, rej) => execFile('tar', ['-xzf', 'skill.tgz'], { cwd: tmp }, (e) => e ? rej(e) : res()));
+    const found = [];
+    const scan = (dir, depth) => {
+      if (depth > 4) return;
+      if (fs.existsSync(path.join(dir, 'SKILL.md'))) { found.push(dir); return; }
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) if (e.isDirectory()) scan(path.join(dir, e.name), depth + 1);
+    };
+    for (const e of fs.readdirSync(tmp, { withFileTypes: true })) if (e.isDirectory()) scan(path.join(tmp, e.name), 0);
+    if (!found.length) return { ok: false, error: 'no SKILL.md found in that repository' };
+    fs.mkdirSync(overlay, { recursive: true });
+    const installed = [];
+    for (const dir of found) {
+      const fm = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8').match(/^name:\s*(.+)$/m);
+      const name = (fm ? fm[1].trim() : path.basename(dir)).replace(/[^A-Za-z0-9._-]/g, '-').replace(/-skill$/, '') || repo;
+      const dest = path.join(overlay, name);
+      fs.rmSync(dest, { recursive: true, force: true });
+      fs.cpSync(dir, dest, { recursive: true });
+      installed.push(name);
+    }
+    await ncl(['groups', 'restart', '--id', agentId]);
+    return { ok: true, data: installed };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 async function getState() {
   // A checkout with no NanoClaw install has no host socket — say so plainly
   // instead of letting every call fail with a confusing CLI error.
@@ -250,6 +327,20 @@ async function handleApi(req, res, url, body) {
     if (req.method === 'GET' && url.pathname === '/api/ping')
       return send(200, { ok: true, app: 'nanoclaw-ui', pid: process.pid, root: ROOT });
 
+    if (req.method === 'GET' && url.pathname === '/api/browse') {
+      let dir = url.searchParams.get('path') || HOME;
+      dir = path.resolve(dir.replace(/^~/, HOME));
+      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) dir = HOME;
+      let dirs = [];
+      try {
+        dirs = fs.readdirSync(dir, { withFileTypes: true })
+          .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+          .map(e => ({ name: e.name, path: path.join(dir, e.name) }))
+          .sort((a, b) => a.name.localeCompare(b.name)).slice(0, 300);
+      } catch { return send(200, { ok: true, data: { path: dir, parent: path.dirname(dir), dirs: [], unreadable: true } }); }
+      return send(200, { ok: true, data: { path: dir, parent: dir === '/' ? null : path.dirname(dir), dirs, home: HOME } });
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/state') return send(200, await getState());
 
     if (req.method === 'GET' && url.pathname === '/api/update/check') return send(200, { ok: true, data: await updateCheck() });
@@ -416,8 +507,24 @@ async function handleApi(req, res, url, body) {
         '- If the mission is impossible or unsafe as described, say why and stop.',
       ].join('\n');
       fs.writeFileSync(path.join(groupDir, 'instructions.prepend.md'), persona + '\n');
-      if (schedule && cron?.trim()) await ncl(['tasks', 'create', '--group', id, '--name', `${folder}-schedule`, '--recurrence', cron.trim(), '--prompt', 'Run your mission now, per your standing instructions, and report the result.']);
-      return send(200, { ok: true, data: { id, folder } });
+      // Folders, then skills, then the schedule — each best-effort, reported back.
+      const applied = { folders: [], skills: [], schedule: null, problems: [] };
+      for (const f of body.folders || []) {
+        const m = await mountFolder(id, f.hostPath, f.containerPath);
+        m.ok ? applied.folders.push(m.data.hostPath) : applied.problems.push(`folder ${f.hostPath}: ${m.error}`);
+      }
+      for (const u of body.skills || []) {
+        const s = await installSkillFromGithub(id, u);
+        s.ok ? applied.skills.push(...s.data) : applied.problems.push(`skill ${u}: ${s.error}`);
+      }
+      if (cron?.trim()) {
+        const args = ['tasks', 'create', '--group', id, '--name', `${folder}-schedule`, '--recurrence', cron.trim(),
+          '--prompt', 'Run your mission now, per your standing instructions, and report the result.'];
+        if (body.forceSchedule) args.push('--dangerously-override-recurrence-limit');
+        const s = await ncl(args);
+        s.ok ? (applied.schedule = cron.trim()) : applied.problems.push(`schedule: ${JSON.stringify(s.error)}`);
+      }
+      return send(200, { ok: true, data: { id, folder, applied } });
     }
 
     if (req.method === 'POST' && parts[1] === 'agents' && parts[3] === 'run') {
@@ -468,26 +575,8 @@ async function handleApi(req, res, url, body) {
         return send(200, await ncl(['groups', 'config', 'remove-mount', '--id', parts[2], '--host', body.remove.hostPath, '--container', body.remove.containerPath]));
       }
       if (req.method === 'POST') {
-        let { hostPath, containerPath, allowRoot } = body;
-        if (!hostPath?.trim()) return send(400, { ok: false, error: 'pick a folder' });
-        hostPath = path.resolve(hostPath.replace(/^~/, process.env.HOME || '~').trim());
-        if (!fs.existsSync(hostPath) || !fs.statSync(hostPath).isDirectory())
-          return send(400, { ok: false, error: `${hostPath} is not a folder on this machine.` });
-        containerPath = (containerPath || path.basename(hostPath)).replace(/[^A-Za-z0-9._-]/g, '-');
-        const allow = readAllow();
-        const roots = (allow.allowedRoots || []).map(r => path.resolve(r.path));
-        const covered = roots.some(r => hostPath === r || hostPath.startsWith(r + path.sep));
-        if (!covered) {
-          if (!allowRoot) return send(400, { ok: false, error: 'not-allowlisted', hostPath, roots });
-          // Operator explicitly consented to widen the allowlist.
-          allow.allowedRoots = allow.allowedRoots || [];
-          allow.allowedRoots.push({ path: hostPath, allowReadWrite: true, description: 'added from the console' });
-          fs.mkdirSync(path.dirname(allowPath), { recursive: true });
-          fs.writeFileSync(allowPath, JSON.stringify(allow, null, 2) + '\n');
-        }
-        const r = await ncl(['groups', 'config', 'add-mount', '--id', parts[2], '--host', hostPath, '--container', containerPath]);
-        if (r.ok) await ncl(['groups', 'restart', '--id', parts[2]]);
-        return send(r.ok ? 200 : 500, r);
+        const r = await mountFolder(parts[2], body.hostPath, body.containerPath);
+        return send(r.ok ? 200 : 400, r);
       }
     }
 
@@ -525,44 +614,10 @@ async function handleApi(req, res, url, body) {
         return send(200, { ok: true });
       }
       if (req.method === 'POST' && body.githubUrl) {
-        const m = String(body.githubUrl).trim().match(/^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/(?:tree|blob)\/([\w.\/-]+))?\/?$/);
-        if (!m) return send(400, { ok: false, error: 'not a github.com repository URL' });
-        const [, owner, repo, ref] = m;
-        const tmp = fs.mkdtempSync(path.join(ROOT, 'data', 'skill-dl-'));
-        try {
-          const tarUrl = `https://codeload.github.com/${owner}/${repo}/tar.gz/${ref ? encodeURIComponent(ref.split('/')[0]) : 'HEAD'}`;
-          const resp = await fetch(tarUrl);
-          if (!resp.ok) return send(400, { ok: false, error: `GitHub fetch failed (${resp.status}) — is the repo public?` });
-          fs.writeFileSync(path.join(tmp, 'skill.tgz'), Buffer.from(await resp.arrayBuffer()));
-          await new Promise((res, rej) => execFile('tar', ['-xzf', 'skill.tgz'], { cwd: tmp }, (e) => e ? rej(e) : res()));
-          // Find every folder containing a SKILL.md (root of repo counts too).
-          const found = [];
-          const scan = (dir, depth) => {
-            if (depth > 4) return;
-            if (fs.existsSync(path.join(dir, 'SKILL.md'))) { found.push(dir); return; }
-            for (const e of fs.readdirSync(dir, { withFileTypes: true })) if (e.isDirectory()) scan(path.join(dir, e.name), depth + 1);
-          };
-          for (const e of fs.readdirSync(tmp, { withFileTypes: true })) if (e.isDirectory()) scan(path.join(tmp, e.name), 0);
-          if (!found.length) return send(400, { ok: false, error: 'no SKILL.md found in that repository' });
-          fs.mkdirSync(overlay, { recursive: true });
-          const installed = [];
-          for (const dir of found) {
-            const fm = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8').match(/^name:\s*(.+)$/m);
-            const name = (fm ? fm[1].trim() : path.basename(dir) === path.basename(found[0]) && found.length === 1 ? repo : path.basename(dir))
-              .replace(/[^A-Za-z0-9._-]/g, '-').replace(/-skill$/, '') || repo;
-            const dest = path.join(overlay, name);
-            fs.rmSync(dest, { recursive: true, force: true });
-            fs.cpSync(dir, dest, { recursive: true });
-            installed.push(name);
-          }
-          await ncl(['groups', 'restart', '--id', parts[2]]);
-          return send(200, { ok: true, data: installed });
-        } catch (e) {
-          return send(500, { ok: false, error: String(e.message || e) });
-        } finally {
-          fs.rmSync(tmp, { recursive: true, force: true });
-        }
+        const r = await installSkillFromGithub(parts[2], body.githubUrl);
+        return send(r.ok ? 200 : 400, r);
       }
+
       if (req.method === 'POST' && body.zipBase64) {
         const tmp = fs.mkdtempSync(path.join(ROOT, 'data', 'skill-up-'));
         try {
