@@ -372,13 +372,19 @@ async function handleApi(req, res, url, body) {
       const TYPES = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
       if (!TYPES[ext]) return send(400, { ok: false, error: 'not an image path' });
       // Roots an agent can legitimately have written to.
-      const roots = [path.join(ROOT, 'groups')];
+      // Each bot's own workspace is /workspace/agent inside its container.
+      const groupsRoot = path.join(ROOT, 'groups');
+      const roots = [groupsRoot];
+      try { for (const f of fs.readdirSync(groupsRoot)) roots.push(path.join(groupsRoot, f)); } catch {}
       try {
         const allow = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config', 'nanoclaw', 'mount-allowlist.json'), 'utf8'));
         for (const r of allow.allowedRoots || []) if (r.path) roots.push(path.resolve(r.path));
       } catch {}
       // Container paths map back to their host root; relative paths are tried under each.
-      const rel = raw.replace(/^\/workspace\/(?:extra|group|project)\/[^/]*\/?/, '').replace(/^\/+/, '');
+      const rel = raw
+        .replace(/^\/workspace\/agent\/?/, '')
+        .replace(/^\/workspace\/(?:extra|group|project)\/[^/]*\/?/, '')
+        .replace(/^\/+/, '');
       const candidates = [];
       if (path.isAbsolute(raw)) candidates.push(path.resolve(raw));
       for (const r of roots) candidates.push(path.resolve(r, rel));
@@ -547,6 +553,7 @@ async function handleApi(req, res, url, body) {
         '## Your mission', mission.trim(), '',
         '## Operating rules',
         '- When asked to "run your mission", perform it once end-to-end, then reply with a concise report: what you did, what worked, what the result was. Include concrete outputs (links, filenames, numbers).',
+        '- If you produce an image, file or chart, show it in your report as markdown: `![what it is](/workspace/agent/name.png)` — the console renders that inline, so the person reading sees the actual result instead of a path. Always give the full path you saved it to.',
         ...(vaulted.length ? [
           '- The following APIs are AUTO-AUTHENTICATED by a secure gateway — call them normally WITHOUT any API key; authentication is injected for you and you cannot see or need the key:',
           ...vaulted.map(v => `  - ${v.host} (${v.key})`),
