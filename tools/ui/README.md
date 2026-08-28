@@ -19,6 +19,9 @@ mounts, install skills and wire channels).
   host it's a plain setting in `groups/<bot>/bot.env`.
 - **Skills** — add per-bot from a GitHub URL or a dropped `.zip`; the bot
   restarts to pick them up.
+- **Runs** — every run from every bot in one scrollable feed, newest first, with
+  the agent's markdown rendered (headings, lists, links, code). Filter by bot or
+  search the text; long runs clip with a Show more.
 - **Channels** — connect a Discord channel to a bot.
 - **Schedules** — run / pause / resume, last result and full run history.
 

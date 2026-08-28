@@ -142,6 +142,47 @@ async function handleApi(req, res, url, body) {
       return send(200, { ok: true, data: created.data });
     }
 
+    // ── Runs feed: every run entry across every bot, newest first ──────────
+    if (req.method === 'GET' && url.pathname === '/api/runs') {
+      const groupsDir = path.join(ROOT, 'groups');
+      const wantBot = url.searchParams.get('bot') || '';
+      const limit = Math.min(Number(url.searchParams.get('limit')) || 150, 500);
+      const groupNames = {};
+      for (const g of (await ncl(['groups', 'list'])).data || []) groupNames[g.folder] = { name: g.name, id: g.id };
+      const runs = [];
+      if (fs.existsSync(groupsDir)) {
+        for (const folder of fs.readdirSync(groupsDir)) {
+          if (wantBot && folder !== wantBot) continue;
+          const tDir = path.join(groupsDir, folder, 'tasks');
+          if (!fs.existsSync(tDir)) continue;
+          for (const file of fs.readdirSync(tDir)) {
+            if (!file.endsWith('.md')) continue;
+            const series = file.replace(/\.md$/, '');
+            const lines = fs.readFileSync(path.join(tDir, file), 'utf8').split('\n');
+            let cur = null;
+            for (const line of lines) {
+              const m = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s+—\s+([\s\S]*)$/);
+              if (m) {
+                if (cur) runs.push(cur);
+                cur = {
+                  bot: groupNames[folder]?.name || folder, botFolder: folder, botId: groupNames[folder]?.id || null,
+                  series, kind: series.startsWith('ui-ask') ? 'ask' : series.startsWith('ui-run') ? 'run' : 'scheduled',
+                  ts: m[1], text: m[2],
+                };
+              } else if (cur && line.trim()) cur.text += '\n' + line;
+            }
+            if (cur) runs.push(cur);
+          }
+        }
+      }
+      for (const r of runs) {
+        r.failed = /failed to authenticate|^error:|api error:|\bfailed:/i.test(r.text);
+        r.quiet = /nothing cleared the bar|no qualifying idea|nothing qualified|sent no message|silently/i.test(r.text);
+      }
+      runs.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
+      return send(200, { ok: true, data: runs.slice(0, limit), total: runs.length });
+    }
+
     if (req.method === 'GET' && parts[1] === 'tasks' && parts[3] === 'history') {
       const series = parts[2].replace(/[^A-Za-z0-9_-]/g, '');
       const groupsDir = path.join(ROOT, 'groups');
