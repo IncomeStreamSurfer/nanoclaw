@@ -123,6 +123,8 @@
   .dlg-b{padding:20px 26px;max-height:64vh;overflow:auto}
   .dlg-f{padding:16px 26px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;align-items:center;gap:10px;border-radius:0 0 16px 16px}
   .envrow{display:grid;grid-template-columns:1fr 1fr 1.2fr 34px;gap:8px;margin-top:8px}
+  .envrow input,.envrow select{min-width:0}
+  @media (max-width: 720px){ .envrow{grid-template-columns:1fr 1fr;} .envrow>:nth-child(3){grid-column:1/-1} }
   .note{display:flex;gap:9px;padding:11px 13px;border:1px solid var(--good-line);border-radius:9px;background:var(--good-soft);font-size:12.5px;line-height:1.6;color:var(--dim)}
   #toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:11px 16px;display:none;max-width:420px;z-index:99;box-shadow:var(--shadow);font-size:13px}
   /* Runs feed */
@@ -246,8 +248,27 @@
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div><label>Runtime</label><select id="bProvider" style="width:100%"><option value="claude">Claude</option><option value="codex">Codex (OpenAI)</option><option value="ollama">Ollama (local)</option></select></div>
-      <div><label>Schedule <span class="hint">— optional</span></label><input id="bCron" placeholder="0 9 * * * (9am daily)" style="width:100%"></div>
+      <div><label>Schedule <span class="hint">— optional</span></label>
+        <select id="bSchedPreset" style="width:100%" onchange="wizSchedChange()">
+          <option value="">No schedule — run it yourself</option>
+          <option value="0 * * * *">Every hour</option>
+          <option value="0 */6 * * *">Every 6 hours</option>
+          <option value="daily">Every day at…</option>
+          <option value="weekdays">Weekdays at…</option>
+        </select>
+        <input type="time" id="bSchedTime" value="09:00" style="width:130px;margin-top:8px;display:none" oninput="wizSchedChange()">
+        <div id="bSchedNote" class="muted" style="font-size:12px;margin-top:6px"></div>
+      </div>
     </div>
+
+    <label>Folders <span class="hint">— what it can read and write on your machine</span></label>
+    <div id="bFolders"></div>
+    <div class="row" style="margin-top:8px"><button onclick="openPick(f=>{wizFolders.push(f);renderWizFolders();})">Choose a folder…</button></div>
+
+    <label>Skills <span class="hint">— optional, from GitHub</span></label>
+    <div id="bSkills"></div>
+    <div class="row"><input id="bSkillUrl" placeholder="https://github.com/you/your-skill" style="flex:1">
+      <button onclick="const v=$('bSkillUrl').value.trim();if(v){wizSkills.push(v);$('bSkillUrl').value='';renderWizSkills();}">Add</button></div>
   </div>
   <div class="dlg-f">
     <div class="muted" style="font-size:12.5px">Runs in its own container. Nothing shared with your other bots.</div>
@@ -697,7 +718,7 @@ function wizCron(){
 let foAgent=null, miAgent=null;
 async function openFolders(id){
   foAgent=id; $('foBot').textContent=S.groups.find(g=>g.id===id)?.name||'';
-  $('foNote').textContent=''; $('foHost').value=''; $('foName').value='';
+  $('foNote').textContent='';
   const r=await api(`/api/agents/${id}/mounts`); const d=r.data||{mounts:[],allowedRoots:[]};
   $('foList').innerHTML=(d.mounts.length?d.mounts.map(m=>`<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="mono" style="font-size:12.5px">${esc(m.hostPath)}</span>
@@ -706,18 +727,6 @@ async function openFolders(id){
     </div>`).join(''):'<div class="muted">No folders mounted — this bot can only see its own workspace.</div>')
     +(d.allowedRoots.length?`<div class="muted" style="margin-top:10px;font-size:12px">Allowed roots: ${d.allowedRoots.map(r=>`<span class="mono">${esc(r)}</span>`).join(', ')}</div>`:'');
   dlgFolders.showModal();
-}
-async function addFolder(allowRoot){
-  const hostPath=$('foHost').value.trim(); if(!hostPath) return;
-  const r=await api(`/api/agents/${foAgent}/mounts`,{hostPath,containerPath:$('foName').value.trim()||undefined,allowRoot});
-  if(!r.ok&&r.error==='not-allowlisted'){
-    $('foNote').innerHTML=`<div class="note" style="border-color:var(--accent);background:var(--accent-soft)">
-      <div><b style="color:var(--text)">${esc(r.hostPath)}</b> is outside the folders NanoClaw is allowed to mount. Adding it widens what any bot on this install may be given access to — only do this for folders you're happy an agent can read and write.
-      <div class="row" style="margin-top:10px"><button class="primary" onclick="addFolder(true)">Allow this folder</button></div></div></div>`;
-    return;
-  }
-  if(!r.ok){ $('foNote').innerHTML=`<div class="muted" style="color:var(--bad)">${esc(errMsg(r))}</div>`; return; }
-  toast('Folder mounted — bot restarted'); openFolders(foAgent); refresh();
 }
 async function removeFolder(json){
   const m=JSON.parse(json);
