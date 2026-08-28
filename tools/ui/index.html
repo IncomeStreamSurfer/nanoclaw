@@ -331,12 +331,21 @@ async function refresh(){
 function render(){
   if(!S) return;
   if(S.hostReady===false){
-    $('nav').innerHTML=''; $('pageTitle').textContent='Setup needed'; $('pageSub').textContent='';
+    $('nav').innerHTML=''; $('pageTitle').textContent=S.hostProblem==='down'?'Host offline':'Setup needed'; $('pageSub').textContent='';
     const hb=document.querySelector('.hoststat .box');
     if(hb){hb.querySelector('span.dot').style.background='var(--idle)';
-      hb.querySelectorAll('span')[1].textContent='Not set up';
+      hb.querySelectorAll('span')[1].textContent=S.hostProblem==='down'?'Host offline':'Not set up';
       $('hostBots').textContent='—';}
-    $('view').innerHTML=`<div class="card" style="max-width:640px">
+    const down=S.hostProblem==='down';
+    $('view').innerHTML=down?`<div class="card" style="max-width:660px">
+      <h3>NanoClaw is installed here, but the host isn't running</h3>
+      <div class="muted" style="margin:10px 0 16px;line-height:1.65">Your bots and their history are safe — the console just can't reach the service. Most often it's Docker not running, or the host tripped its restart guard after repeated crashes.</div>
+      <pre style="background:var(--code);border:1px solid var(--line-2);border-radius:8px;padding:14px 16px;font:13px 'Geist Mono',monospace;color:var(--text);overflow-x:auto">open -a Docker
+rm -f data/circuit-breaker.json
+launchctl kickstart -k gui/$(id -u)/com.nanoclaw-v2-$(node -e "console.log(require('crypto').createHash('sha1').update(process.cwd()).digest('hex').slice(0,8))")</pre>
+      <div class="muted" style="margin-top:14px;line-height:1.65">If it still won't start, the reason is the last <span class="mono">FATAL</span> line in <span class="mono">logs/nanoclaw.error.log</span>. A common one after updating outside the sanctioned path: <span class="mono">pnpm exec tsx scripts/upgrade-state.ts set</span>.</div>
+      ${S.hostError?`<div class="out" style="margin:14px 0 0"><div class="txt" style="max-height:120px">${esc(S.hostError)}</div></div>`:''}
+    </div>`:`<div class="card" style="max-width:640px">
       <h3>NanoClaw isn't set up in this checkout yet</h3>
       <div class="muted" style="margin:10px 0 16px;line-height:1.65">The console drives a NanoClaw install — the container sandbox, the credential vault and the host service. Run the installer once, in this folder, then reload this page:</div>
       <pre style="background:var(--code);border:1px solid var(--line-2);border-radius:8px;padding:14px 16px;font:13px 'Geist Mono',monospace;color:var(--text);overflow-x:auto">bash nanoclaw.sh</pre>

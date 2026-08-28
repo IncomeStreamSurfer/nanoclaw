@@ -56,9 +56,14 @@ async function vaultListFor(botFolder) {
 async function getState() {
   // A checkout with no NanoClaw install has no host socket — say so plainly
   // instead of letting every call fail with a confusing CLI error.
-  const hostReady = fs.existsSync(path.join(ROOT, 'data', 'ncl.sock'));
+  // A stale ncl.sock survives a crash, so existence proves nothing — ask the host.
+  const probe = await ncl(['groups', 'list']);
+  const hostReady = probe.ok;
   if (!hostReady) {
-    return { hostReady: false, groups: [], wirings: [], messagingGroups: [], tasks: [],
+    const installed = fs.existsSync(path.join(ROOT, 'data', 'v2.db'));
+    const why = /ECONNREFUSED|ENOENT/.test(JSON.stringify(probe.error || ''))
+      ? (installed ? 'down' : 'not-installed') : 'error';
+    return { hostReady: false, hostProblem: why, hostError: String(probe.error || '').slice(0, 400), groups: [], wirings: [], messagingGroups: [], tasks: [],
       groupConfigs: {}, providers: PROVIDERS, templates: [], channels: { discord: { installed: false } },
       stats: { runsToday: 0, failedToday: 0, vaultKeys: 0, nextRunMs: null } };
   }
@@ -213,6 +218,11 @@ async function updateApply(force) {
       const c = await sh('bash', ['container/build.sh'], { timeout: 1_800_000 });
       s.state = c.ok ? 'done' : 'failed'; s.detail = c.out.trim().split('\n').slice(-2).join(' ').slice(0, 300);
     }
+
+    s = step('Stamping the upgrade marker');
+    // v2.1+ refuses to boot unless data/upgrade-state.json matches this commit.
+    const us = await sh('pnpm', ['exec', 'tsx', 'scripts/upgrade-state.ts', 'set'], { timeout: 120_000 });
+    s.state = us.ok ? 'done' : 'failed'; s.detail = us.ok ? 'install marked as sanctioned' : us.out.slice(-200);
 
     s = step('Restarting NanoClaw');
     const rs = await sh('bash', ['setup/lib/restart.sh'], { timeout: 180_000 });
