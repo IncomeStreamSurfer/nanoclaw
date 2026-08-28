@@ -47,6 +47,7 @@ import {
 } from './db/pending-sender-approvals.js';
 import { getOwners } from './db/user-roles.js';
 import { getUser } from './db/users.js';
+import { AGENT_ACCESS_SCOPE_WARNING } from './channel-approval.js';
 
 const APPROVAL_OPTIONS: RawOption[] = [
   { label: 'Allow', selectedLabel: '✅ Allowed', value: 'approve', style: 'primary' },
@@ -111,7 +112,7 @@ export async function requestSenderApproval(input: RequestSenderApprovalInput): 
   const originName = originMg?.name ?? `a ${originChannelType} channel`;
 
   const title = '👤 New sender';
-  const question = `${senderDisplay} wants to talk to your agent in ${originName}. Allow?`;
+  const question = `${senderDisplay} wants to talk to your agent in ${originName}. ${AGENT_ACCESS_SCOPE_WARNING} Allow?`;
   const options = normalizeOptions(APPROVAL_OPTIONS);
 
   await createPendingSenderApproval({
