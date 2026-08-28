@@ -26,7 +26,8 @@ mounts, install skills and wire channels).
   restarts to pick them up.
 - **Runs** — every run from every bot in one scrollable feed, newest first, with
   the agent's markdown rendered (headings, lists, links, code). Filter by bot or
-  search the text; long runs clip with a Show more. Thumbnails a bot wrote are
+  search the text; long runs clip with a Show more, and **Full output** pulls the
+  complete report from the session transcript when NanoClaw'''s run log truncated it. Thumbnails a bot wrote are
   rendered inline — bare paths, backticked paths and markdown images all work,
   served only from the mount allowlist and the groups directory.
 - **Channels** — connect a Discord channel to a bot.

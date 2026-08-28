@@ -404,7 +404,7 @@
 
 <script>
 let S=null, missions={}, outputs={}, toolsOpen={}, page='bots', envAgent=null, skillsAgent=null;
-let runs=[], runsTotal=null, runFilter='', runQuery='', runsExpanded={}, runsLoading=false;
+let runs=[], runsTotal=null, runFilter='', runQuery='', runsExpanded={}, runsLoading=false, fullRuns={};
 const $=(id)=>document.getElementById(id);
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const errMsg=(r)=>r.error?.message||(typeof r.error==='string'?r.error:JSON.stringify(r.error));
@@ -652,6 +652,15 @@ function viewRuns(){
   const qi=$('runQ'); if(qi&&document.activeElement!==qi&&runQuery){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 
+async function loadFull(key, series, ts, btn){
+  btn.textContent='Loading…'; btn.disabled=true;
+  const r=await api(`/api/runs/${series}/full?ts=${encodeURIComponent(ts)}`);
+  if(!r.ok){ btn.textContent='Full output unavailable'; return; }
+  fullRuns[key]=r.data.text;
+  runsExpanded[key]=true;
+  if(!r.data.full) toast('That was already the complete output.');
+  render();
+}
 function runCard(r){
   const key=(r.series+'|'+r.ts).replace(/'/g,'');
   const open=runsExpanded[key];
@@ -666,8 +675,11 @@ function runCard(r){
       ${r.failed?'<span class="chip" style="color:var(--bad);border-color:var(--bad)">failed</span>':''}
       <span class="muted" style="margin-left:auto;font-size:12.5px" title="${esc(r.ts)}">${ago(r.ts)}</span>
     </div>
-    <div class="rb md ${long&&!open?'clip':''}">${md(r.text)}</div>
-    ${long?`<button class="more" onclick="runsExpanded['${key}']=${!open};render()">${open?'Show less':'Show more'}</button>`:''}
+    <div class="rb md ${long&&!open?'clip':''}" id="rb-${key}">${md(fullRuns[key]||r.text)}</div>
+    <div class="row" style="gap:0">
+      ${long?`<button class="more" style="flex:1" onclick="runsExpanded['${key}']=${!open};render()">${open?'Show less':'Show more'}</button>`:''}
+      ${fullRuns[key]?'':`<button class="more" style="flex:1" onclick="loadFull('${key}','${esc(r.series)}','${esc(r.ts)}',this)">Full output</button>`}
+    </div>
   </div>`;
 }
 

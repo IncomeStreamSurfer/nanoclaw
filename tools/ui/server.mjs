@@ -391,6 +391,57 @@ async function handleApi(req, res, url, body) {
       return send(404, { ok: false, error: 'not found in an allowed root' });
     }
 
+    // ── Full, untruncated output for one run ───────────────────────────────
+    // The task log stores a shortened summary; the agent's complete final
+    // message lives in the session transcript.
+    if (req.method === 'GET' && parts[1] === 'runs' && parts[3] === 'full') {
+      const series = String(parts[2]).replace(/[^A-Za-z0-9_-]/g, '');
+      const stamp = url.searchParams.get('ts') || '';
+      const groupsDir = path.join(ROOT, 'groups');
+      let folder = null;
+      for (const f of fs.existsSync(groupsDir) ? fs.readdirSync(groupsDir) : [])
+        if (fs.existsSync(path.join(groupsDir, f, 'tasks', `${series}.md`))) { folder = f; break; }
+      if (!folder) return send(404, { ok: false, error: 'no such run' });
+      const g = ((await ncl(['groups', 'list'])).data || []).find(x => x.folder === folder);
+      // Stored (possibly truncated) entry for this timestamp.
+      const stored = fs.readFileSync(path.join(groupsDir, folder, 'tasks', `${series}.md`), 'utf8')
+        .split('\n').find(l => l.startsWith(stamp)) || '';
+      const body0 = stored.replace(/^\S+ \S+\s+—\s+/, '').trim();
+      if (!g?.id) return send(200, { ok: true, data: { text: body0, full: false } });
+
+      // Search this agent's transcripts for the assistant message the entry was cut from.
+      const projDir = path.join(ROOT, 'data', 'v2-sessions', g.id, '.claude-shared', 'projects');
+      // The stored entry has its newlines collapsed; compare on normalised text.
+      const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
+      const probe = norm(body0).slice(0, 40);
+      let best = '';
+      const walk = (dir) => {
+        if (!fs.existsSync(dir)) return;
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          const fp = path.join(dir, e.name);
+          if (e.isDirectory()) { walk(fp); continue; }
+          if (!e.name.endsWith('.jsonl')) continue;
+          let raw; try { raw = fs.readFileSync(fp, 'utf8'); } catch { continue; }
+          // No cheap pre-filter: escapes are literal in the raw JSONL, so the
+          // match has to happen after parsing each message.
+          if (raw.length > 40_000_000) continue;
+          for (const line of raw.split('\n')) {
+            if (!line.trim()) continue;
+            let d; try { d = JSON.parse(line); } catch { continue; }
+            const content = d?.message?.content;
+            if (d?.type !== 'assistant' || !Array.isArray(content)) continue;
+            for (const c of content) {
+              if (c?.type === 'text' && typeof c.text === 'string'
+                  && c.text.length > best.length && probe && norm(c.text).includes(probe))
+                best = c.text;
+            }
+          }
+        }
+      };
+      walk(projDir);
+      return send(200, { ok: true, data: { text: best || body0, full: best.length > body0.length } });
+    }
+
     // ── Runs feed: every run entry across every bot, newest first ──────────
     if (req.method === 'GET' && url.pathname === '/api/runs') {
       const groupsDir = path.join(ROOT, 'groups');
