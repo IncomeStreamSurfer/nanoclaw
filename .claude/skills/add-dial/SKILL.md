@@ -33,6 +33,7 @@ src/channels/dial-user-agent.ts
 src/channels/dial-user-agent.test.ts
 src/channels/dial-registration.test.ts
 src/channels/dial-grant.test.ts
+src/channels/dial-status.test.ts
 ```
 
 The `dial-cli` container skill is deliberately **not** copied here.
@@ -383,8 +384,31 @@ CLI and its skill in the agent image, and registers the account's key with
 OneCLI. It needs OneCLI; if that isn't set up it says so, and the channel
 still works without the tool:
 
-```nc:run effect:step when:install_tool=yes
-pnpm exec tsx setup/lib/skill-driver.ts .claude/skills/add-dial-tool
+The tool's own document asks which agents may use Dial. Ask it here instead: a
+nested step's stdout is a pipe, so clack cannot echo what is typed into it, and
+this skill owns the operator's terminal. List the groups, then collect the answer
+and hand it down:
+
+```nc:run capture:has_agents validate:^(yes|no)$ when:install_tool=yes effect:fetch
+ncl groups list --json | jq -r 'if (.data|length)==0 then "no" else "yes" end'
+```
+```nc:operator when:has_agents=no
+No agents exist yet — this install creates its first one in a moment, so there is nobody to choose between. Installing the tool for every agent; re-run `/add-dial-tool` any time to narrow that down.
+```
+```nc:run capture:agent_groups when:has_agents=yes effect:fetch
+ncl groups list --json | jq -r '[.data[] | "\(.id) (\(.name))"] | join(", ")'
+```
+```nc:operator when:has_agents=yes
+Agents on this install: {{agent_groups}}. Giving an agent Dial lets it text and call any number and buy numbers, billed to your Dial account. Agents you leave out are blocked at the gateway (reversible by running /add-dial-tool again). Agents created after this run have Dial until the next run.
+```
+```nc:prompt dial_agents validate:^(all|none|ag-[A-Za-z0-9-]+(,ag-[A-Za-z0-9-]+)*)$ normalize:trim when:has_agents=yes
+Which agents may use Dial? Enter agent ids separated by commas with no spaces (the `ag-…` column), `all` for every agent, or `none` to install the tool with every agent blocked for now.
+```
+```nc:run effect:step when:has_agents=yes
+pnpm exec tsx setup/lib/skill-driver.ts .claude/skills/add-dial-tool --input 'dial_agents={{dial_agents}}'
+```
+```nc:run effect:step when:has_agents=no
+pnpm exec tsx setup/lib/skill-driver.ts .claude/skills/add-dial-tool --input 'dial_agents=all'
 ```
 
 Then tell the sandboxed agent which line is its own. The container authenticates
