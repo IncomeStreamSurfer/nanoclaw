@@ -41,8 +41,15 @@ Light and dark themes; the toggle sits in the host-status box.
 pnpm run ui
 ```
 
+Then open http://127.0.0.1:7799.
+
 No build step and no dependencies beyond what NanoClaw already has. It shells
 out to this checkout's `bin/ncl`, so it manages whatever install it sits in.
+
+Running `pnpm run ui` again replaces whatever console is already on the port —
+including one started from a different checkout — so you never have to hunt down
+a stray process. If the port is held by something that is *not* the console, it
+says so and exits rather than killing it.
 
 Optional environment:
 

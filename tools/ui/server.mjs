@@ -237,6 +237,9 @@ async function handleApi(req, res, url, body) {
   const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
   const parts = url.pathname.split('/').filter(Boolean); // api, ...
   try {
+    if (req.method === 'GET' && url.pathname === '/api/ping')
+      return send(200, { ok: true, app: 'nanoclaw-ui', pid: process.pid, root: ROOT });
+
     if (req.method === 'GET' && url.pathname === '/api/state') return send(200, await getState());
 
     if (req.method === 'GET' && url.pathname === '/api/update/check') return send(200, { ok: true, data: await updateCheck() });
@@ -589,4 +592,42 @@ const server = http.createServer(async (req, res) => {
   res.end(page);
 });
 
-server.listen(PORT, '127.0.0.1', () => console.log(`NanoClaw UI → http://127.0.0.1:${PORT}`));
+// Taking over the port: a second `pnpm run ui` should replace the instance
+// that's already running, not die with a raw EADDRINUSE stack. Only ever kill
+// a process that identifies itself as this console.
+async function whoHasPort() {
+  try {
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/ping`, { signal: AbortSignal.timeout(2000) });
+    const j = await r.json();
+    return j?.app === 'nanoclaw-ui' ? j : null;
+  } catch { return null; }
+}
+const portFree = () => new Promise((resolve) => {
+  const probe = http.createServer();
+  probe.once('error', () => resolve(false));
+  probe.once('listening', () => probe.close(() => resolve(true)));
+  probe.listen(PORT, '127.0.0.1');
+});
+
+server.on('error', async (err) => {
+  if (err.code !== 'EADDRINUSE') { console.error(err.message); process.exit(1); }
+  const other = await whoHasPort();
+  if (!other) {
+    console.error(`\nPort ${PORT} is in use by something that isn't the NanoClaw console.`);
+    console.error(`Pick another port:  NANOCLAW_UI_PORT=7800 pnpm run ui\n`);
+    process.exit(1);
+  }
+  console.log(`Replacing the console already running on ${PORT} (pid ${other.pid}${other.root === ROOT ? '' : `, from ${other.root}`})…`);
+  try { process.kill(other.pid, 'SIGTERM'); } catch {}
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 250));
+    if (await portFree()) break;
+    if (i === 12) { try { process.kill(other.pid, 'SIGKILL'); } catch {} }
+  }
+  server.listen(PORT, '127.0.0.1');
+});
+
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 1500); });
+
+server.listen(PORT, '127.0.0.1');
+server.on('listening', () => console.log(`NanoClaw UI → http://127.0.0.1:${PORT}`));

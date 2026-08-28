@@ -35,8 +35,11 @@ drift from the CLI. Everything upstream still works exactly as it did.
 git clone https://github.com/IncomeStreamSurfer/nanoclaw.git
 cd nanoclaw
 pnpm install
-pnpm run ui          # → http://127.0.0.1:7799
+pnpm run ui
 ```
+
+Then open **http://127.0.0.1:7799**. Running it again replaces the instance
+already on that port, so you never have to hunt one down.
 
 You need a working NanoClaw install first (`bash nanoclaw.sh` handles that —
 dependencies, sandbox image, vault, credentials, service). The console manages
