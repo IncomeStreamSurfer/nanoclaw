@@ -306,7 +306,9 @@ const SUN='<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4
 const MOON='<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path>';
 function applyTheme(t){document.documentElement.setAttribute('data-theme',t);localStorage.nctheme=t;$('themeIcon').innerHTML=t==='light'?MOON:SUN;}
 function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');}
-applyTheme(localStorage.nctheme||'dark');
+const _q=new URLSearchParams(location.search);
+applyTheme(_q.get('theme')==='light'?'light':_q.get('theme')==='dark'?'dark':(localStorage.nctheme||'dark'));
+page=(location.hash.slice(1)&&['bots','runs','channels','schedules','skills'].includes(location.hash.slice(1)))?location.hash.slice(1):'bots';
 
 const ICONS={bots:'<rect x="4" y="7" width="16" height="12" rx="3"></rect><path d="M12 7V4"></path><circle cx="9" cy="13" r="1"></circle><circle cx="15" cy="13" r="1"></circle>',
  channels:'<path d="M4 8h16M4 14h16"></path><path d="M10 4 8 20M16 4l-2 16"></path>',
@@ -314,7 +316,9 @@ const ICONS={bots:'<rect x="4" y="7" width="16" height="12" rx="3"></rect><path 
  schedules:'<circle cx="12" cy="12" r="8"></circle><path d="M12 8v4.5l3 1.8"></path>',
  skills:'<path d="M12 3 4 7v6c0 5 3.5 7.5 8 8 4.5-.5 8-3 8-8V7z"></path>'};
 const PAGES=[['bots','Bots'],['runs','Runs'],['channels','Channels'],['schedules','Schedules'],['skills','Skills']];
-function go(p){page=p;render();}
+function go(p){page=p;if(location.hash.slice(1)!==p)history.replaceState(null,'','#'+p);render();}
+function pageFromHash(){const h=location.hash.slice(1);return PAGES.some(([k])=>k===h)?h:'bots';}
+window.addEventListener('hashchange',()=>{page=pageFromHash();render();});
 
 async function refresh(){
   S=await api('/api/state');
