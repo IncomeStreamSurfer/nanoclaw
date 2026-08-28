@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NanoClaw</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&family=Geist+Mono:wght@400;500&family=Instrument+Serif&display=swap">
+<style>
+  :root{
+    --bg:#0B0C0E; --surface:#101317; --surface-2:#0E1013; --surface-3:#191C21; --code:#08090B;
+    --line:#1D2127; --line-2:#23272E; --line-3:#2E333B;
+    --text:#E9ECF1; --dim:#99A1AE; --muted:#8A93A2; --faint:#79828F;
+    --accent:#E8825A; --accent-fg:#17110D; --accent-soft:rgba(232,130,90,0.09); --accent-line:#3A2A22;
+    --good:#4ADE80; --good-soft:rgba(74,222,128,0.07); --good-line:#1F3328;
+    --bad:#F87171; --idle:#3F4650;
+    --info:#A5B4FC; --info-bg:#17162B; --info-line:#312E5E;
+    --display:Geist, ui-sans-serif, system-ui, sans-serif;
+    --shadow:0 24px 60px -18px rgba(0,0,0,0.7);
+  }
+  [data-theme="light"]{
+    --bg:#FAF8F5; --surface:#FFFFFF; --surface-2:#FDFCFA; --surface-3:#F1EBE1; --code:#FBF9F6;
+    --line:#E9E2D8; --line-2:#E0D8CC; --line-3:#D6CEC2;
+    --text:#1C1917; --dim:#57534E; --muted:#78716C; --faint:#8C857B;
+    --accent:#B4451F; --accent-fg:#FFFFFF; --accent-soft:#FBF0EA; --accent-line:#F0DACE;
+    --good:#16A34A; --good-soft:rgba(22,163,74,0.06); --good-line:#CFE7D6;
+    --bad:#DC2626; --idle:#D6CEC2;
+    --info:#4F46E5; --info-bg:#EEF0FE; --info-line:#DDE0FC;
+    --display:"Instrument Serif", Georgia, serif;
+    --shadow:0 1px 2px rgba(28,25,23,0.04), 0 12px 32px -14px rgba(28,25,23,0.16);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 Geist,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;height:100vh;overflow:hidden}
+  .mono{font-family:"Geist Mono",ui-monospace,SFMono-Regular,monospace}
+  h1,h2,h3{margin:0}
+  a{color:var(--accent);text-decoration:none}
+
+  /* Sidebar */
+  #side{width:236px;flex-shrink:0;background:var(--surface-2);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  [data-theme="light"] #side{background:transparent}
+  .brand{height:64px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid var(--line)}
+  [data-theme="light"] .brand{border-bottom-color:transparent}
+  .brand .name{font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:-0.01em}
+  [data-theme="light"] .brand .name{font-size:20px;font-weight:400}
+  .nav{padding:14px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:7px;color:var(--dim);font-size:13.5px;cursor:pointer}
+  .nav a:hover{background:var(--surface-3)}
+  .nav a.on{background:var(--surface-3);color:var(--text);font-weight:500}
+  .nav a .ct{margin-left:auto;font-size:11px;color:var(--faint);font-family:"Geist Mono",monospace}
+  .hoststat{margin-top:auto;padding:14px}
+  .hoststat .box{border:1px solid var(--line);border-radius:9px;padding:12px;background:var(--bg)}
+  .hrow{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:6px}
+
+  /* Main */
+  #main{flex-grow:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:64px;flex-shrink:0;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 24px}
+  .title{font-family:var(--display);font-size:17px;font-weight:600;letter-spacing:-0.015em}
+  [data-theme="light"] .title{font-size:24px;font-weight:400}
+  .sub{font-size:13px;color:var(--muted)}
+  .body{flex-grow:1;overflow:auto;padding:22px 24px 40px;display:flex;flex-direction:column;gap:18px}
+
+  /* Controls */
+  button,.btn{background:var(--surface-3);color:var(--text);border:1px solid var(--line-2);border-radius:8px;padding:7px 13px;font-size:13px;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:7px;min-height:34px}
+  button:hover,.btn:hover{border-color:var(--line-3)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+  button.primary:hover{filter:brightness(1.06)}
+  button.ghost{background:transparent}
+  button.danger:hover{border-color:var(--bad);color:var(--bad)}
+  button.icon{padding:0;width:34px;justify-content:center}
+  input,select,textarea{background:var(--surface-2);color:var(--text);border:1px solid var(--line-2);border-radius:8px;padding:8px 11px;font-size:13.5px;font-family:inherit;min-height:34px}
+  [data-theme="light"] input,[data-theme="light"] select,[data-theme="light"] textarea{background:var(--surface)}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  textarea{width:100%;min-height:92px;resize:vertical;line-height:1.6}
+  label{display:block;font-size:12.5px;font-weight:500;color:var(--dim);margin:14px 0 6px}
+  label .hint{font-weight:400;color:var(--faint)}
+
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .stat{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:14px 16px}
+  .stat .k{font-size:11.5px;color:var(--muted)}
+  .stat .v{font-family:var(--display);font-size:22px;font-weight:600;letter-spacing:-0.02em;margin-top:4px}
+  [data-theme="light"] .stat .v{font-weight:400;font-size:26px}
+  .stat .d{font-size:11.5px;margin-left:7px;font-family:Geist,sans-serif;font-weight:400}
+
+  /* Bot table */
+  .panel{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+  .thead,.trow{display:grid;grid-template-columns:1fr 128px 124px 132px;gap:16px;align-items:center;padding:13px 18px}
+  .thead{background:var(--surface-2);border-bottom:1px solid var(--line);padding:11px 18px}
+  .thead div{font-size:11px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase}
+  .trow{border-bottom:1px solid var(--line)}
+  .trow:last-child{border-bottom:none}
+  .botname{font-family:var(--display);font-size:14px;font-weight:560;letter-spacing:-0.01em}
+  [data-theme="light"] .botname{font-size:17px;font-weight:400}
+  .mission{font-size:12.5px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .chip{font-size:11px;border:1px solid var(--line-2);border-radius:5px;padding:2px 7px;color:var(--dim);font-family:"Geist Mono",monospace}
+  .chip.info{color:var(--info);background:var(--info-bg);border-color:var(--info-line);font-family:Geist,sans-serif}
+  .chip.acc{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line);font-family:Geist,sans-serif}
+  .runcell{display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12.5px;color:var(--dim)}
+
+  /* Output */
+  .out{margin:0 18px 16px 37px;border:1px solid var(--line-2);border-radius:10px;background:var(--code);overflow:hidden}
+  .out .head{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+  .out .head .t{font-size:11.5px;color:var(--muted);font-family:"Geist Mono",monospace}
+  .out .txt{padding:13px 15px;font-size:13px;line-height:1.65;color:var(--dim);white-space:pre-wrap;max-height:340px;overflow:auto}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line-3);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite;flex-shrink:0}
+  @keyframes s{to{transform:rotate(360deg)}}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:18px 20px}
+  .card h3{font-family:var(--display);font-size:16px;font-weight:560;letter-spacing:-0.01em}
+  [data-theme="light"] .card h3{font-size:19px;font-weight:400}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .muted{color:var(--muted);font-size:13px}
+  .keychip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:6px;padding:4px 9px;font:12px "Geist Mono",monospace;color:var(--dim);margin:0 4px 4px 0}
+  .keychip .x{color:var(--faint);cursor:pointer}.keychip .x:hover{color:var(--bad)}
+
+  dialog{background:var(--surface);color:var(--text);border:1px solid var(--line-2);border-radius:16px;padding:0;max-width:640px;width:94%;box-shadow:var(--shadow)}
+  dialog::backdrop{background:rgba(0,0,0,.62)}
+  .dlg-h{padding:22px 26px 18px;border-bottom:1px solid var(--line)}
+  .dlg-h h3{font-family:var(--display);font-size:19px;font-weight:600;letter-spacing:-0.018em}
+  [data-theme="light"] .dlg-h h3{font-size:23px;font-weight:400}
+  .dlg-b{padding:20px 26px;max-height:64vh;overflow:auto}
+  .dlg-f{padding:16px 26px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;align-items:center;gap:10px;border-radius:0 0 16px 16px}
+  .envrow{display:grid;grid-template-columns:1fr 1fr 1.2fr 34px;gap:8px;margin-top:8px}
+  .note{display:flex;gap:9px;padding:11px 13px;border:1px solid var(--good-line);border-radius:9px;background:var(--good-soft);font-size:12.5px;line-height:1.6;color:var(--dim)}
+  #toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:11px 16px;display:none;max-width:420px;z-index:99;box-shadow:var(--shadow);font-size:13px}
+  .drop{border:2px dashed var(--line-3);border-radius:10px;padding:22px;text-align:center;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<div id="side">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 4.5 4.5 8 7 11.5"></path><path d="M4.5 8H10"></path><path d="M17 4.5 19.5 8 17 11.5"></path><path d="M19.5 8H14"></path>
+      <circle cx="12" cy="15" r="4.5"></circle><path d="M9.6 18.7 8 21.5M14.4 18.7 16 21.5"></path>
+    </svg>
+    <div class="name">NanoClaw</div>
+    <div class="mono" style="margin-left:auto;font-size:11px;color:var(--muted);border:1px solid var(--line-2);border-radius:4px;padding:2px 5px">2.3</div>
+  </div>
+  <div class="nav" id="nav"></div>
+  <div class="hoststat">
+    <div class="box">
+      <div style="display:flex;align-items:center;gap:7px">
+        <span class="dot" style="background:var(--good);box-shadow:0 0 0 3px var(--good-soft)"></span>
+        <span style="font-size:12px;font-weight:500">Host healthy</span>
+        <button class="ghost" style="margin-left:auto;min-height:24px;padding:2px 7px;border:none" onclick="toggleTheme()" title="Toggle light / dark">
+          <svg id="themeIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"></svg>
+        </button>
+      </div>
+      <div class="hrow"><span>Sandbox</span><span class="mono" style="color:var(--dim)">docker</span></div>
+      <div class="hrow"><span>Vault</span><span class="mono" style="color:var(--good)">locked</span></div>
+      <div class="hrow"><span>Bots</span><span class="mono" id="hostBots" style="color:var(--dim)">—</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <div class="title" id="pageTitle">Bots</div>
+      <div class="sub" id="pageSub"></div>
+    </div>
+    <div style="margin-left:auto" class="row">
+      <button class="primary" onclick="openWizard()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+        New bot
+      </button>
+    </div>
+  </div>
+  <div class="body" id="view"></div>
+</div>
+
+<!-- New bot -->
+<dialog id="dlgBot">
+  <div class="dlg-h">
+    <h3>New bot</h3>
+    <div class="muted" style="margin-top:5px">Describe what it should do. It runs in its own sandbox, with only what you give it.</div>
+  </div>
+  <div class="dlg-b">
+    <label>Name</label><input id="bName" placeholder="e.g. price watcher" style="width:100%">
+    <label>Mission <span class="hint">— what it does every time it runs</span></label>
+    <textarea id="bMission" placeholder="Check the pricing pages of my three competitors, compare against last time, and tell me about any change over 5% — with the old price, the new price and the page it came from."></textarea>
+    <label>Personality <span class="hint">— optional starting point</span></label>
+    <select id="agTemplate" style="width:100%"><option value="">Blank</option></select>
+    <label>Keys &amp; settings <span class="hint">— optional</span></label>
+    <div class="envrow" style="margin-top:0">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Key</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Value</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">API host</div><div></div>
+    </div>
+    <div id="bEnvRows"></div>
+    <div class="row" style="margin-top:8px"><button class="ghost" onclick="addEnvRow()">+ add key</button></div>
+    <div class="note" style="margin-top:12px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V7.5a4 4 0 0 1 8 0V11"></path></svg>
+      <div>Give a key an <b style="color:var(--text)">API host</b> and it goes into the vault — injected into requests to that host automatically. The bot calls the API normally and <b style="color:var(--text)">never sees the key itself</b>. Leave the host blank for plain settings like <span class="mono">CITY=Dublin</span>.</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div><label>Runtime</label><select id="bProvider" style="width:100%"><option value="claude">Claude</option><option value="codex">Codex (OpenAI)</option><option value="ollama">Ollama (local)</option></select></div>
+      <div><label>Schedule <span class="hint">— optional</span></label><input id="bCron" placeholder="0 9 * * * (9am daily)" style="width:100%"></div>
+    </div>
+  </div>
+  <div class="dlg-f">
+    <div class="muted" style="font-size:12.5px">Runs in its own container. Nothing shared with your other bots.</div>
+    <div style="margin-left:auto" class="row">
+      <button onclick="dlgBot.close()">Cancel</button>
+      <button class="primary" onclick="createBot()">Create &amp; run</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlgDiscord">
+  <div class="dlg-h"><h3>Connect a Discord channel</h3>
+    <div class="muted" style="margin-top:5px">Enable Developer Mode in Discord, then right-click the server → Copy Server ID, and the channel → Copy Channel ID. The bot must already be in the server.</div></div>
+  <div class="dlg-b">
+    <label>Server ID</label><input id="dGuild" placeholder="1063115771…" style="width:100%">
+    <label>Channel ID</label><input id="dChannel" placeholder="1480520306…" style="width:100%">
+    <label>Bot</label><select id="dAgent" style="width:100%"></select>
+    <label>Label</label><input id="dName" placeholder="my-channel" style="width:100%">
+  </div>
+  <div class="dlg-f"><div style="margin-left:auto" class="row"><button onclick="dlgDiscord.close()">Cancel</button><button class="primary" onclick="wireDiscord()">Connect</button></div></div>
+</dialog>
+
+<dialog id="dlgEnv">
+  <div class="dlg-h"><h3>Keys — <span id="envBot"></span></h3>
+    <div class="muted" style="margin-top:5px">🔒 vault-locked keys are injected into API calls automatically; the bot never sees the value.</div></div>
+  <div class="dlg-b">
+    <div id="envKeys" style="margin-bottom:6px"></div>
+    <label>Add or replace</label>
+    <div class="row"><input id="envKey" placeholder="KEY" style="flex:1"><input id="envVal" placeholder="value" style="flex:1"></div>
+    <div class="row" style="margin-top:8px"><input id="envHost" placeholder="API host (optional — locks in vault)" style="flex:2"><select id="envInject" style="flex:1"><option value="bearer">Bearer header</option><option value="param">URL param</option></select></div>
+  </div>
+  <div class="dlg-f"><div style="margin-left:auto" class="row"><button onclick="dlgEnv.close()">Close</button><button class="primary" onclick="saveEnv()">Save key</button></div></div>
+</dialog>
+
+<dialog id="dlgSkills">
+  <div class="dlg-h"><h3>Skills — <span id="skBot"></span></h3>
+    <div class="muted" style="margin-top:5px">A skill teaches this bot how to do something — a folder with a SKILL.md.</div></div>
+  <div class="dlg-b">
+    <div id="skList" style="margin-bottom:6px"></div>
+    <label>Add from GitHub</label>
+    <div class="row"><input id="skUrl" placeholder="https://github.com/you/your-skill" style="flex:1"><button class="primary" onclick="addSkillUrl()">Add</button></div>
+    <label>…or drop a .zip of the skill folder</label>
+    <div class="drop" id="skDrop" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--line-3)'" ondrop="dropSkill(event)">
+      drag &amp; drop skill.zip — or <a href="#" onclick="$('skFile').click();return false">choose a file</a>
+    </div>
+    <input type="file" id="skFile" accept=".zip" style="display:none" onchange="fileSkill(this.files[0])">
+    <div id="skStatus" class="muted" style="margin-top:10px"></div>
+  </div>
+  <div class="dlg-f"><div style="margin-left:auto"><button onclick="dlgSkills.close()">Close</button></div></div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+let S=null, missions={}, outputs={}, toolsOpen={}, page='bots', envAgent=null, skillsAgent=null;
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const errMsg=(r)=>r.error?.message||(typeof r.error==='string'?r.error:JSON.stringify(r.error));
+function toast(m,ok=true){const t=$('toast');t.textContent=m;t.style.borderColor=ok?'var(--good)':'var(--bad)';t.style.display='block';setTimeout(()=>t.style.display='none',4500);}
+async function api(p,o){const r=await fetch(p,o!==undefined?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)}:undefined);return r.json();}
+
+/* theme */
+const SUN='<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>';
+const MOON='<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path>';
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);localStorage.nctheme=t;$('themeIcon').innerHTML=t==='light'?MOON:SUN;}
+function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');}
+applyTheme(localStorage.nctheme||'dark');
+
+const ICONS={bots:'<rect x="4" y="7" width="16" height="12" rx="3"></rect><path d="M12 7V4"></path><circle cx="9" cy="13" r="1"></circle><circle cx="15" cy="13" r="1"></circle>',
+ channels:'<path d="M4 8h16M4 14h16"></path><path d="M10 4 8 20M16 4l-2 16"></path>',
+ schedules:'<circle cx="12" cy="12" r="8"></circle><path d="M12 8v4.5l3 1.8"></path>',
+ skills:'<path d="M12 3 4 7v6c0 5 3.5 7.5 8 8 4.5-.5 8-3 8-8V7z"></path>'};
+const PAGES=[['bots','Bots'],['channels','Channels'],['schedules','Schedules'],['skills','Skills']];
+function go(p){page=p;render();}
+
+async function refresh(){
+  S=await api('/api/state');
+  for(const g of S.groups) if(!(g.id in missions)){
+    api(`/api/agents/${g.id}/mission`).then(r=>{const m=(r.data||'').match(/## Your mission\n([\s\S]*?)(\n## |$)/);missions[g.id]=m?m[1].trim():'';render();});
+  }
+  render();
+}
+
+function render(){
+  if(!S) return;
+  const counts={bots:S.groups.length,channels:S.messagingGroups.length,schedules:S.tasks.filter(t=>!String(t.series_id||t.id).startsWith('ui-')).length,skills:''};
+  $('nav').innerHTML=PAGES.map(([k,label])=>`<a class="${page===k?'on':''}" onclick="go('${k}')">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${page===k?'var(--accent)':'var(--muted)'}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>
+    ${label}<span class="ct">${counts[k]}</span></a>`).join('');
+  $('hostBots').textContent=S.groups.length;
+  const running=Object.values(outputs).filter(o=>o.running).length;
+  $('pageTitle').textContent=PAGES.find(p=>p[0]===page)[1];
+  $('pageSub').textContent=page==='bots'?`${S.groups.length} configured${running?` · ${running} running`:''}`:'';
+  ({bots:viewBots,channels:viewChannels,schedules:viewSchedules,skills:viewSkills})[page]();
+  for(const el of document.querySelectorAll('.txt[data-agent]')){const o=outputs[el.dataset.agent];if(o&&!o.running)el.textContent=o.text;}
+}
+
+function viewBots(){
+  const st=S.stats||{};
+  const nextRun=st.nextRunMs!=null?(st.nextRunMs<3600000?Math.max(1,Math.round(st.nextRunMs/60000))+'m':Math.round(st.nextRunMs/3600000)+'h'):'—';
+  $('view').innerHTML=`
+  <div class="stats">
+    <div class="stat"><div class="k">Bots</div><div class="v">${S.groups.length}<span class="d" style="color:var(--accent)">${S.wirings.length} wired</span></div></div>
+    <div class="stat"><div class="k">Runs today</div><div class="v">${st.runsToday??'—'}<span class="d" style="color:${st.failedToday?'var(--bad)':'var(--good)'}">${st.failedToday?st.failedToday+' failed':'none failed'}</span></div></div>
+    <div class="stat"><div class="k">Next scheduled</div><div class="v">${nextRun}</div></div>
+    <div class="stat"><div class="k">Vault keys</div><div class="v">${st.vaultKeys??'—'}<span class="d" style="color:var(--good)">all locked</span></div></div>
+  </div>
+  <div class="panel">
+    <div class="thead"><div>Bot</div><div>Runtime</div><div>Schedule</div><div style="text-align:right">Last run</div></div>
+    ${S.groups.map(botRow).join('')||'<div style="padding:26px;text-align:center" class="muted">No bots yet — hit “New bot”.</div>'}
+  </div>`;
+}
+
+function botRow(g){
+  const cfg=S.groupConfigs[g.id]||{}, prov=cfg.provider||'claude';
+  const wired=S.wirings.filter(w=>w.agent_group_id===g.id);
+  const chan=wired.map(w=>S.messagingGroups.find(m=>m.id===w.messaging_group_id)).filter(Boolean);
+  const task=S.tasks.find(t=>t.agent_group_id===g.id&&!String(t.series_id||t.id).startsWith('ui-'));
+  const o=outputs[g.id];
+  const running=o&&o.running;
+  return `<div class="trow">
+    <div style="display:flex;align-items:center;gap:12px;min-width:0">
+      <span class="dot" style="background:${running?'var(--accent)':'var(--good)'};box-shadow:0 0 0 3px ${running?'var(--accent-soft)':'var(--good-soft)'}"></span>
+      <div style="min-width:0;flex-grow:1">
+        <div class="row" style="gap:8px">
+          <span class="botname">${esc(g.name)}</span>
+          ${chan.map(c=>`<span class="chip info">#${esc(c.name||'channel')}</span>`).join('')}
+        </div>
+        <div class="mission">${esc(missions[g.id]||'no mission set — use Ask below')}</div>
+      </div>
+    </div>
+    <div><select onchange="setProvider('${g.id}',this.value)" style="min-height:30px;padding:4px 8px;font-size:12.5px">
+      ${S.providers.map(p=>`<option value="${p}" ${p===prov?'selected':''}>${p}</option>`).join('')}</select></div>
+    <div class="mono" style="font-size:12px;color:${task?'var(--dim)':'var(--faint)'}">${task?esc(task.recurrence||'one-shot'):'manual'}</div>
+    <div class="runcell">
+      <span>${running?'running':(task&&task.completed_runs?task.completed_runs+' runs':'—')}</span>
+      <button class="icon" title="Run mission" onclick="runBot('${g.id}')">
+        ${running?'<span class="spin"></span>':'<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"></path></svg>'}
+      </button>
+      <button class="icon" title="More" onclick="toggleTools('${g.id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>
+      </button>
+    </div>
+  </div>
+  <div id="tools-${g.id}" style="display:${toolsOpen[g.id]?'block':'none'};padding:0 18px 14px 37px">
+    <div class="row">
+      <input class="askbox" placeholder="Ask ${esc(g.name)} to do something…" style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')ask('${g.id}',this)">
+      <button onclick="ask('${g.id}',this.previousElementSibling)">Ask</button>
+      <button onclick="openEnv('${g.id}')">Keys</button>
+      <button onclick="openSkills('${g.id}')">Skills</button>
+      <button onclick="restart('${g.id}')">Restart</button>
+      <button class="danger" onclick="delBot('${g.id}')">Delete</button>
+    </div>
+  </div>
+  ${o?`<div class="out"><div class="head">
+      ${o.running?'<span class="spin"></span>':'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"></path></svg>'}
+      <span class="t">${o.running?'working':'result'}</span>
+      <button class="ghost" style="margin-left:auto;min-height:24px;padding:2px 8px;font-size:11.5px" onclick="clearOut('${g.id}')">dismiss</button>
+    </div><div class="txt" data-agent="${g.id}">${o.running?esc(o.text):''}</div></div>`:''}`;
+}
+
+function viewChannels(){
+  const d=S.channels.discord;
+  $('view').innerHTML=`<div class="cards">
+    <div class="card">
+      <div class="row"><h3>Discord</h3><span class="chip ${d.installed?'acc':''}">${d.installed?'installed':'not installed'}</span></div>
+      <div class="muted" style="margin-top:8px">${S.messagingGroups.filter(m=>m.channel_type==='discord').map(m=>'#'+esc(m.name||m.platform_id)).join(', ')||'No channels connected yet.'}</div>
+      <div class="row" style="margin-top:14px">${d.installed?'<button class="primary" onclick="openDiscord()">Connect a channel</button>':'<span class="muted">Run /add-discord in Claude Code to install the adapter.</span>'}</div>
+    </div>
+    ${S.wirings.map(w=>{const m=S.messagingGroups.find(x=>x.id===w.messaging_group_id),g=S.groups.find(x=>x.id===w.agent_group_id);
+      return `<div class="card"><h3>#${esc(m?.name||'channel')}</h3>
+      <div class="muted" style="margin-top:6px">Talking to <b style="color:var(--text)">${esc(g?.name||'—')}</b></div>
+      <div class="mono" style="font-size:11.5px;color:var(--faint);margin-top:10px">${esc(m?.platform_id||'')}</div></div>`;}).join('')}
+  </div>`;
+}
+
+function viewSchedules(){
+  const ts=S.tasks.filter(t=>!String(t.series_id||t.id).startsWith('ui-'));
+  $('view').innerHTML=ts.length?`<div class="cards">${ts.map(t=>{const id=t.series_id||t.id,g=S.groups.find(x=>x.id===t.agent_group_id);
+    return `<div class="card">
+      <div class="row"><h3>${esc(g?.name||id)}</h3><span class="chip">${esc(t.status)}</span></div>
+      <div class="muted" style="margin-top:6px">Runs <span class="mono" style="color:var(--text)">${esc(t.recurrence||'once')}</span> · ${t.completed_runs??0} runs${t.failed_runs?` · ${t.failed_runs} failed`:''}</div>
+      <div class="row" style="margin-top:14px">
+        <button onclick="task('${id}','run')">Run now</button>
+        ${t.status==='paused'?`<button onclick="task('${id}','resume')">Resume</button>`:`<button onclick="task('${id}','pause')">Pause</button>`}
+        <button onclick="showHistory('${id}',this)">All runs</button>
+      </div>
+      ${t.last_result?`<div class="out" style="margin:12px 0 0"><div class="txt" style="max-height:150px">${esc(t.last_result)}</div></div>`:''}
+      <div class="out hist" style="margin:12px 0 0;display:none"><div class="txt" style="max-height:260px"></div></div>
+    </div>`;}).join('')}</div>`:'<div class="muted">No scheduled jobs. Add a schedule when you create a bot.</div>';
+}
+
+function viewSkills(){
+  $('view').innerHTML=`<div class="cards">${S.groups.map(g=>`<div class="card">
+    <h3>${esc(g.name)}</h3>
+    <div id="sk-${g.id}" class="muted" style="margin:10px 0">loading…</div>
+    <button onclick="openSkills('${g.id}')">Manage skills</button>
+  </div>`).join('')}</div>`;
+  for(const g of S.groups) api(`/api/agents/${g.id}/skills`).then(r=>{const el=$('sk-'+g.id);if(el)el.innerHTML=(r.data||[]).map(s=>`<span class="keychip">${esc(s)}</span>`).join('')||'<span class="muted">no skills</span>';});
+}
+
+/* actions */
+function toggleTools(id){toolsOpen[id]=!toolsOpen[id];render();}
+function setOut(id,running,text){outputs[id]={running,text};render();}
+function clearOut(id){delete outputs[id];render();}
+function pollInto(series,id){const t0=Date.now();const iv=setInterval(async()=>{
+  const t=await api(`/api/tasks/${series}`);const logs=t.data?.recent_log||[];
+  if(logs.length){clearInterval(iv);setOut(id,false,logs[logs.length-1]);}
+  else if(Date.now()-t0>600000){clearInterval(iv);setOut(id,false,'Still running — check the task log.');}},5000);}
+async function runBot(id){setOut(id,true,'Running mission… (usually 1–3 minutes)');const r=await api(`/api/agents/${id}/run`,{});if(!r.ok)return setOut(id,false,'Failed: '+errMsg(r));pollInto(r.data.series,id);}
+async function ask(id,input){const q=input.value.trim();if(!q)return;input.value='';setOut(id,true,'Thinking…');const r=await api(`/api/agents/${id}/ask`,{prompt:q});if(!r.ok)return setOut(id,false,'Failed: '+errMsg(r));pollInto(r.data.series,id);}
+async function setProvider(id,p){const r=await api(`/api/agents/${id}/provider`,{provider:p});toast(r.ok?`Runtime set to ${p}`:'Failed: '+errMsg(r),r.ok);refresh();}
+async function restart(id){const r=await api(`/api/agents/${id}/restart`,{});toast(r.ok?'Restarted':'Failed: '+errMsg(r),r.ok);}
+async function delBot(id){const g=S.groups.find(x=>x.id===id);if(!confirm(`Delete "${g?.name}"? Its workspace, memory and schedules go with it.`))return;
+  const r=await api(`/api/agents/${id}/delete`,{});toast(r.ok?'Deleted':'Failed: '+errMsg(r),r.ok);missions={};delete outputs[id];refresh();}
+
+/* wizard */
+function addEnvRow(){const d=document.createElement('div');d.className='envrow';
+  d.innerHTML=`<input class="ek" placeholder="KEY"><input class="ev" placeholder="value"><input class="eh" placeholder="api.example.com"><select class="ei" style="display:none"><option value="bearer">Bearer</option><option value="param">Param</option></select>`;
+  d.querySelector('.eh').addEventListener('input',e=>d.querySelector('.ei').style.display=e.target.value.trim()?'block':'none');
+  $('bEnvRows').appendChild(d);}
+function openWizard(){$('bEnvRows').innerHTML='';addEnvRow();
+  $('agTemplate').innerHTML='<option value="">Blank</option>'+(S?.templates||[]).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  dlgBot.showModal();}
+async function createBot(){
+  const env=[...document.querySelectorAll('#bEnvRows .envrow')].map(r=>({key:r.querySelector('.ek').value.trim(),value:r.querySelector('.ev').value,host:r.querySelector('.eh').value.trim(),inject:r.querySelector('.ei').value})).filter(e=>e.key);
+  const cron=$('bCron').value.trim();
+  const r=await api('/api/bots',{name:$('bName').value.trim(),mission:$('bMission').value.trim(),env,schedule:!!cron,cron,template:$('agTemplate').value||undefined});
+  if(!r.ok)return toast('Failed: '+errMsg(r),false);
+  const prov=$('bProvider').value;
+  if(prov!=='claude')await api(`/api/agents/${r.data.id}/provider`,{provider:prov});
+  dlgBot.close();$('bName').value='';$('bMission').value='';$('bCron').value='';
+  toast('Bot created — running its first mission');missions={};await refresh();runBot(r.data.id);}
+
+/* keys */
+async function openEnv(id){envAgent=id;$('envBot').textContent=S.groups.find(g=>g.id===id)?.name||'';
+  const r=await api(`/api/agents/${id}/env`);const d=r.data||{settings:[],vault:[]};
+  $('envKeys').innerHTML=(d.vault.map(v=>`<span class="keychip">🔒 ${esc(v.key)} <span style="opacity:.6">→ ${esc(v.host)}</span> <span class="x" onclick="dropVault('${v.id}')">×</span></span>`).join('')
+    +d.settings.map(k=>`<span class="keychip">${esc(k)} <span class="x" onclick="dropKey('${esc(k)}')">×</span></span>`).join(''))||'<span class="muted">No keys yet.</span>';
+  dlgEnv.showModal();}
+async function saveEnv(){const k=$('envKey').value.trim();if(!k)return;
+  const r=await api(`/api/agents/${envAgent}/env`,{key:k,value:$('envVal').value,host:$('envHost').value.trim(),inject:$('envInject').value});
+  toast(r.ok?'Key saved':'Failed: '+errMsg(r),r.ok);$('envKey').value='';$('envVal').value='';$('envHost').value='';openEnv(envAgent);}
+async function dropKey(k){await api(`/api/agents/${envAgent}/env`,{key:k,value:''});openEnv(envAgent);}
+async function dropVault(id){await api(`/api/agents/${envAgent}/env`,{removeVaultId:id});openEnv(envAgent);}
+
+/* skills */
+async function openSkills(id){skillsAgent=id;$('skBot').textContent=S.groups.find(g=>g.id===id)?.name||'';$('skStatus').textContent='';await listSkills();dlgSkills.showModal();}
+async function listSkills(){const r=await api(`/api/agents/${skillsAgent}/skills`);
+  $('skList').innerHTML=(r.data||[]).map(s=>`<span class="keychip">${esc(s)} <span class="x" onclick="rmSkill('${esc(s)}')">×</span></span>`).join('')||'<span class="muted">No skills installed.</span>';}
+async function addSkillUrl(){const u=$('skUrl').value.trim();if(!u)return;$('skStatus').innerHTML='<span class="spin"></span> Fetching from GitHub…';
+  const r=await api(`/api/agents/${skillsAgent}/skills`,{githubUrl:u});
+  $('skStatus').textContent=r.ok?`Installed: ${r.data.join(', ')} — bot restarted`:'Failed: '+errMsg(r);if(r.ok)$('skUrl').value='';listSkills();}
+async function rmSkill(n){await api(`/api/agents/${skillsAgent}/skills`,{remove:n});listSkills();}
+function dropSkill(e){e.preventDefault();$('skDrop').style.borderColor='var(--line-3)';const f=e.dataTransfer.files[0];if(f)fileSkill(f);}
+function fileSkill(f){if(!f||!/\.zip$/i.test(f.name)){$('skStatus').textContent='Please choose a .zip file';return;}
+  $('skStatus').innerHTML='<span class="spin"></span> Uploading…';const rd=new FileReader();
+  rd.onload=async()=>{const r=await api(`/api/agents/${skillsAgent}/skills`,{zipBase64:rd.result.split(',',2)[1]});
+    $('skStatus').textContent=r.ok?`Installed: ${r.data.join(', ')} — bot restarted`:'Failed: '+errMsg(r);listSkills();};
+  rd.readAsDataURL(f);}
+
+/* discord + tasks */
+function openDiscord(){$('dAgent').innerHTML=S.groups.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');dlgDiscord.showModal();}
+async function wireDiscord(){const r=await api('/api/discord/wire',{guildId:$('dGuild').value.trim(),channelId:$('dChannel').value.trim(),agentGroupId:$('dAgent').value,name:$('dName').value.trim()});
+  dlgDiscord.close();toast(r.ok?'Connected — say hi in Discord':'Failed: '+errMsg(r),r.ok);refresh();}
+async function task(id,a){const r=await api(`/api/tasks/${id}/${a}`,{});toast(r.ok?`Task ${a}`:'Failed: '+errMsg(r),r.ok);refresh();}
+async function showHistory(id,btn){const box=btn.closest('.card').querySelector('.out.hist');const txt=box.querySelector('.txt');
+  const r=await api(`/api/tasks/${id}/history`);txt.textContent=r.ok?r.data:'Failed: '+errMsg(r);box.style.display='block';}
+
+refresh();setInterval(refresh,20000);
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "idea-scout",
+  "description": "YouTube channel manager for IncomeStreamSurfers: hourly scouting for video ideas that clear the channel's measured bar, with full packaging (folder, README, thumbnail, dashboard, Discord post).",
+  "extensions": {
+    "ai.nanoco.nanoclaw": {
+      "agentName": "bob"
+    }
+  }
+}

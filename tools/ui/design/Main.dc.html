@@ -1,0 +1,258 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Geist, ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #E8825A; text-decoration: none; } a:hover { color: #F09A78; }
+    .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 1000px; display: flex; background: #0B0C0E; color: #E9ECF1; overflow: hidden;">
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <div style="width: 236px; flex-shrink: 0; background: #0E1013; border-right: 1px solid #1D2127; display: flex; flex-direction: column;">
+
+    <div style="height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid #1D2127;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 4.5 4.5 8 7 11.5"></path>
+        <path d="M4.5 8H10"></path>
+        <path d="M17 4.5 19.5 8 17 11.5"></path>
+        <path d="M19.5 8H14"></path>
+        <circle cx="12" cy="15" r="4.5"></circle>
+        <path d="M9.6 18.7 8 21.5M14.4 18.7 16 21.5"></path>
+      </svg>
+      <div style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">NanoClaw</div>
+      <div class="mono" style="margin-left: auto; font-size: 11px; color: #8A93A2; border: 1px solid #23272E; border-radius: 4px; padding: 2px 5px;">2.3</div>
+    </div>
+
+    <div style="padding: 14px 12px; display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; background: #191C21; color: #E9ECF1; font-size: 13.5px; font-weight: 500;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"></rect><path d="M12 7V4"></path><circle cx="9" cy="13" r="1"></circle><circle cx="15" cy="13" r="1"></circle></svg>
+        Bots
+        <span class="mono" style="margin-left: auto; font-size: 11px; color: #99A1AE;">5</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #99A1AE; font-size: 13.5px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16M4 14h16"></path><path d="M10 4 8 20M16 4l-2 16"></path></svg>
+        Channels
+        <span class="mono" style="margin-left: auto; font-size: 11px; color: #79828F;">1</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #99A1AE; font-size: 13.5px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4.5l3 1.8"></path></svg>
+        Schedules
+        <span class="mono" style="margin-left: auto; font-size: 11px; color: #79828F;">3</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #99A1AE; font-size: 13.5px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v6c0 5 3.5 7.5 8 8 4.5-.5 8-3 8-8V7z"></path></svg>
+        Skills
+        <span class="mono" style="margin-left: auto; font-size: 11px; color: #79828F;">7</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #99A1AE; font-size: 13.5px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 7 4-14 3 7h4"></path></svg>
+        Activity
+      </div>
+    </div>
+
+    <div style="margin-top: auto; padding: 14px;">
+      <div style="border: 1px solid #1D2127; border-radius: 9px; padding: 12px; background: #0B0C0E;">
+        <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 10px;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 0 3px rgba(74,222,128,0.13);"></span>
+          <span style="font-size: 12px; font-weight: 500;">Host healthy</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #8A93A2;"><span>Sandbox</span><span class="mono" style="color: #99A1AE;">docker</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #8A93A2;"><span>Vault</span><span class="mono" style="color: #4ADE80;">locked</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #8A93A2;"><span>Uptime</span><span class="mono" style="color: #99A1AE;">6d 04h</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Main column ─────────────────────────────────────── -->
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+
+    <!-- Top bar -->
+    <div style="height: 64px; flex-shrink: 0; border-bottom: 1px solid #1D2127; display: flex; align-items: center; gap: 16px; padding: 0 24px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <div style="font-size: 17px; font-weight: 600; letter-spacing: -0.015em;">Bots</div>
+        <div style="font-size: 13px; color: #8A93A2;">5 configured · 1 running</div>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 1px solid #23272E; border-radius: 8px; background: #0E1013; width: 232px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span style="font-size: 13px; color: #79828F;">Search bots</span>
+          <span class="mono" style="margin-left: auto; font-size: 11px; color: #79828F; border: 1px solid #23272E; border-radius: 4px; padding: 1px 5px;">⌘K</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 15px; border-radius: 8px; background: {{accent}}; color: #17110D; font-size: 13.5px; font-weight: 600;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#17110D" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+          New bot
+        </div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="flex-grow: 1; padding: 22px 24px; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+
+      <!-- Stat strip -->
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+        <sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+          <div style="border: 1px solid #1D2127; border-radius: 10px; background: #101317; padding: 14px 16px;">
+            <div style="font-size: 11.5px; color: #8A93A2; letter-spacing: 0.02em;">{{s.label}}</div>
+            <div style="display: flex; align-items: baseline; gap: 7px; margin-top: 6px;">
+              <div style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">{{s.value}}</div>
+              <div style="font-size: 11.5px; color: {{s.tintColor}};">{{s.delta}}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- Bot table -->
+      <div style="border: 1px solid #1D2127; border-radius: 12px; background: #101317; overflow: hidden; display: flex; flex-direction: column;">
+
+        <div style="display: grid; grid-template-columns: 1fr 132px 128px 116px; gap: 16px; padding: 11px 18px; border-bottom: 1px solid #1D2127; background: #0E1013;">
+          <div style="font-size: 11px; color: #8A93A2; letter-spacing: 0.06em; text-transform: uppercase;">Bot</div>
+          <div style="font-size: 11px; color: #8A93A2; letter-spacing: 0.06em; text-transform: uppercase;">Runtime</div>
+          <div style="font-size: 11px; color: #8A93A2; letter-spacing: 0.06em; text-transform: uppercase;">Schedule</div>
+          <div style="font-size: 11px; color: #8A93A2; letter-spacing: 0.06em; text-transform: uppercase; text-align: right;">Last run</div>
+        </div>
+
+        <sc-for list="{{bots}}" as="b" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 1fr 132px 128px 116px; gap: 16px; align-items: center; padding: 15px 18px; border-bottom: 1px solid #1A1D23;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+              <span style="width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: {{b.dot}}; box-shadow: 0 0 0 3px {{b.dotGlow}};"></span>
+              <div style="min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 14px; font-weight: 560; letter-spacing: -0.01em;">{{b.name}}</span>
+                  <sc-if value="{{b.discord}}" hint-placeholder-val="{{true}}">
+                    <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #A5B4FC; border: 1px solid #312E5E; background: #17162B; border-radius: 5px; padding: 1.5px 6px;">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="#A5B4FC"><path d="M19.3 5.6A17 17 0 0 0 15.1 4.3l-.2.4a15.7 15.7 0 0 1 3.7 1.2 13 13 0 0 0-11.2 0 15.7 15.7 0 0 1 3.7-1.2l-.2-.4A17 17 0 0 0 4.7 5.6C2 9.7 1.3 13.7 1.7 17.6a17.2 17.2 0 0 0 5.2 2.6l1-1.7a11 11 0 0 1-1.8-.9l.4-.3a12.3 12.3 0 0 0 10.9 0l.4.3a11 11 0 0 1-1.8.9l1 1.7a17.2 17.2 0 0 0 5.2-2.6c.5-4.5-.6-8.5-2.9-12zM8.9 15.2c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.9 2.1-1.9 2.1zm6.2 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.9 2.1-1.9 2.1z"></path></svg>
+                      {{b.discord}}
+                    </span>
+                  </sc-if>
+                </div>
+                <div style="font-size: 12.5px; color: #8A93A2; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{b.mission}}</div>
+              </div>
+            </div>
+            <div>
+              <span class="mono" style="font-size: 11.5px; color: #99A1AE; border: 1px solid #23272E; border-radius: 5px; padding: 3px 8px;">{{b.runtime}}</span>
+            </div>
+            <div class="mono" style="font-size: 12px; color: {{b.scheduleColor}};">{{b.schedule}}</div>
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+              <span style="font-size: 12.5px; color: {{b.lastColor}};">{{b.last}}</span>
+              <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid #23272E; border-radius: 7px; background: #161A1F;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="#99A1AE"><path d="M8 5.5v13l11-6.5z"></path></svg>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+
+        <!-- Expanded, running row -->
+        <div style="border-bottom: 1px solid #1A1D23; background: #0D1014;">
+          <div style="display: grid; grid-template-columns: 1fr 132px 128px 116px; gap: 16px; align-items: center; padding: 15px 18px;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+              <span style="width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: {{accent}}; box-shadow: 0 0 0 3px rgba(232,130,90,0.18);"></span>
+              <div style="min-width: 0;">
+                <div style="font-size: 14px; font-weight: 560; letter-spacing: -0.01em;">HN Watcher</div>
+                <div style="font-size: 12.5px; color: #8A93A2; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Check the HN front page for AI coding tools, pick the 2 most interesting</div>
+              </div>
+            </div>
+            <div><span class="mono" style="font-size: 11.5px; color: #99A1AE; border: 1px solid #23272E; border-radius: 5px; padding: 3px 8px;">claude</span></div>
+            <div class="mono" style="font-size: 12px; color: #79828F;">manual</div>
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+              <span style="font-size: 12.5px; color: {{accent}};">running</span>
+              <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid #3A2A22; border-radius: 7px; background: rgba(232,130,90,0.1);">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="{{accent}}"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live output -->
+          <div style="padding: 0 18px 18px 37px;">
+            <div style="border: 1px solid #23272E; border-radius: 10px; background: #08090B; overflow: hidden;">
+              <div style="display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-bottom: 1px solid #1A1D23; background: #0B0D10;">
+                <span style="width: 5px; height: 5px; border-radius: 50%; background: {{accent}};"></span>
+                <span class="mono" style="font-size: 11.5px; color: #99A1AE;">run 8440</span>
+                <span class="mono" style="font-size: 11.5px; color: #79828F;">started 14:22:11 · 47s</span>
+                <span style="margin-left: auto; font-size: 11.5px; color: #8A93A2;">streaming</span>
+              </div>
+              <div class="mono" style="padding: 13px 14px; font-size: 12px; line-height: 1.75; color: #99A1AE; display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: grid; grid-template-columns: 66px 1fr; gap: 12px;"><span style="color: #79828F;">14:22:14</span><span>reading mission + skills</span></div>
+                <div style="display: grid; grid-template-columns: 66px 1fr; gap: 12px;"><span style="color: #79828F;">14:22:19</span><span>fetching <span style="color: #E9ECF1;">news.ycombinator.com</span> — 30 stories</span></div>
+                <div style="display: grid; grid-template-columns: 66px 1fr; gap: 12px;"><span style="color: #79828F;">14:22:41</span><span>ranking by relevance to AI coding tools</span></div>
+                <div style="display: grid; grid-template-columns: 66px 1fr; gap: 12px; color: #E9ECF1;"><span style="color: #79828F;">14:22:58</span><span><span style="color: {{accent}};">▍</span> writing report…</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completed row with result -->
+        <div style="background: #0D1014;">
+          <div style="display: grid; grid-template-columns: 1fr 132px 128px 116px; gap: 16px; align-items: center; padding: 15px 18px;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+              <span style="width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #4ADE80; box-shadow: 0 0 0 3px rgba(74,222,128,0.14);"></span>
+              <div style="min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 14px; font-weight: 560; letter-spacing: -0.01em;">bob</span>
+                  <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #A5B4FC; border: 1px solid #312E5E; background: #17162B; border-radius: 5px; padding: 1.5px 6px;">#nano-claw</span>
+                  <span style="font-size: 11px; color: {{accent}}; border: 1px solid #3A2A22; background: rgba(232,130,90,0.09); border-radius: 5px; padding: 1.5px 6px;">idea-scout</span>
+                </div>
+                <div style="font-size: 12.5px; color: #8A93A2; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Scout hourly for video ideas that clear the channel's measured bar</div>
+              </div>
+            </div>
+            <div><span class="mono" style="font-size: 11.5px; color: #99A1AE; border: 1px solid #23272E; border-radius: 5px; padding: 3px 8px;">claude</span></div>
+            <div class="mono" style="font-size: 12px; color: #99A1AE;">0 * * * *</div>
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+              <span style="font-size: 12.5px; color: #99A1AE;">12m ago</span>
+              <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid #23272E; border-radius: 7px; background: #161A1F;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="#99A1AE"><path d="M8 5.5v13l11-6.5z"></path></svg>
+              </div>
+            </div>
+          </div>
+
+          <div style="padding: 0 18px 18px 37px;">
+            <div style="border: 1px solid #1D2127; border-radius: 10px; background: #0B0D10; padding: 14px 16px;">
+              <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 9px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"></path></svg>
+                <span style="font-size: 12.5px; font-weight: 560; color: #E9ECF1;">Scout complete — no idea cleared the bar</span>
+                <span class="mono" style="margin-left: auto; font-size: 11px; color: #79828F;">1m 52s</span>
+              </div>
+              <div style="font-size: 13px; line-height: 1.65; color: #99A1AE;">Reviewed 4 developments from the last 24h. Cowork browser rollout is already thickly covered (9to5Mac, VentureBeat); GLM-5.3-Flash overlaps existing idea #057. Nothing passed all four gates — staying silent.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#E8825A","options":["#E8825A","#7C9CF5","#4ADE80","#C084FC"],"section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      accent: this.props.accent ?? '#E8825A',
+      stats: [
+        { label: 'Active bots', value: '5', delta: '1 running', tintColor: '#E8825A' },
+        { label: 'Runs today', value: '38', delta: 'none failed', tintColor: '#4ADE80' },
+        { label: 'Next scheduled', value: '48m', delta: 'bob', tintColor: '#8A93A2' },
+        { label: 'Vault keys', value: '9', delta: 'all locked', tintColor: '#4ADE80' },
+      ],
+      bots: [
+        { name: 'changelog watcher', mission: 'Diff the Claude Code and Cursor changelogs, flag anything that changes how I work', runtime: 'claude', schedule: '0 9 * * *', scheduleColor: '#99A1AE', last: '2h ago', lastColor: '#99A1AE', dot: '#4ADE80', dotGlow: 'rgba(74,222,128,0.14)', discord: '' },
+        { name: 'research bot', mission: 'Deep-dive a topic on request and return a sourced brief', runtime: 'codex', schedule: 'manual', scheduleColor: '#79828F', last: 'yesterday', lastColor: '#8A93A2', dot: '#3F4650', dotGlow: 'rgba(63,70,80,0.2)', discord: '' },
+        { name: 'inbox digest', mission: 'Summarise anything that landed overnight and needs a reply today', runtime: 'ollama', schedule: '0 8 * * 1', scheduleColor: '#99A1AE', last: '3d ago', lastColor: '#8A93A2', dot: '#3F4650', dotGlow: 'rgba(63,70,80,0.2)', discord: '' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Geist, ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #E8825A; text-decoration: none; } a:hover { color: #F09A78; }
+    .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 1000px; background: #0B0C0E; color: #E9ECF1; display: flex; flex-direction: column; overflow: hidden;">
+
+  <!-- Breadcrumb bar -->
+  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #1D2127; display: flex; align-items: center; gap: 10px; padding: 0 26px;">
+    <span style="font-size: 13px; color: #8A93A2;">Bots</span>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3F4650" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"></path></svg>
+    <span style="font-size: 13px; color: #E9ECF1;">bob</span>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 9px;">
+      <div style="height: 32px; padding: 0 13px; border: 1px solid #23272E; border-radius: 8px; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #99A1AE;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>
+        Restart
+      </div>
+      <div style="height: 32px; padding: 0 15px; border-radius: 8px; background: {{accent}}; color: #17110D; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#17110D"><path d="M8 5.5v13l11-6.5z"></path></svg>
+        Run now
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0;">
+
+    <!-- Left: identity + config -->
+    <div style="width: 420px; flex-shrink: 0; border-right: 1px solid #1D2127; padding: 26px; display: flex; flex-direction: column; gap: 24px; overflow: hidden;">
+
+      <div>
+        <div style="display: flex; align-items: center; gap: 11px;">
+          <div style="font-size: 26px; font-weight: 600; letter-spacing: -0.025em;">bob</div>
+          <span style="font-size: 11px; color: #4ADE80; border: 1px solid #1F3328; background: rgba(74,222,128,0.07); border-radius: 5px; padding: 2.5px 8px;">healthy</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+          <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #A5B4FC; border: 1px solid #312E5E; background: #17162B; border-radius: 5px; padding: 2.5px 8px;">#nano-claw</span>
+          <span style="font-size: 11.5px; color: {{accent}}; border: 1px solid #3A2A22; background: rgba(232,130,90,0.08); border-radius: 5px; padding: 2.5px 8px;">idea-scout</span>
+          <span class="mono" style="font-size: 11.5px; color: #99A1AE; border: 1px solid #23272E; border-radius: 5px; padding: 2.5px 8px;">claude</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-size: 11px; color: #8A93A2; letter-spacing: 0.06em; text-transform: uppercase;">Mission</div>
+        <div style="border: 1px solid #1D2127; border-radius: 10px; background: #101317; padding: 14px; font-size: 13.5px; line-height: 1.65; color: #C3CAD4;">Scout hourly for new developments in AI coding tools. Package an idea only when it clears all four gates — genuinely new, thin coverage, ties to a real outcome, and a concrete answer for the click and the hold. Saying no is the default.</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <div style="font-size: 11px; color: #8A93A2; letter-spacing: 0.06em; text-transform: uppercase;">Skills</div>
+          <div style="font-size: 11.5px; color: #79828F;">3</div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+          <sc-for list="{{skills}}" as="s" hint-placeholder-count="3">
+            <span class="mono" style="font-size: 11.5px; color: #C3CAD4; border: 1px solid #23272E; background: #101317; border-radius: 6px; padding: 5px 9px;">{{s}}</span>
+          </sc-for>
+          <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #8A93A2; border: 1px dashed #2E333B; border-radius: 6px; padding: 5px 9px;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+            Add
+          </span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-size: 11px; color: #8A93A2; letter-spacing: 0.06em; text-transform: uppercase;">Keys</div>
+        <div style="border: 1px solid #1D2127; border-radius: 10px; background: #101317; overflow: hidden;">
+          <sc-for list="{{keys}}" as="k" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-bottom: 1px solid #1A1D23;">
+              <sc-if value="{{k.locked}}" hint-placeholder-val="{{true}}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V7.5a4 4 0 0 1 8 0V11"></path></svg>
+              </sc-if>
+              <span class="mono" style="font-size: 12px; color: #C3CAD4;">{{k.key}}</span>
+              <span class="mono" style="margin-left: auto; font-size: 11.5px; color: {{k.hostColor}};">{{k.host}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: run history -->
+    <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 14px; padding: 20px 26px 14px;">
+        <div style="font-size: 15px; font-weight: 600; letter-spacing: -0.012em;">Runs</div>
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <sc-for list="{{spark}}" as="s" hint-placeholder-count="24">
+            <span style="width: 3px; border-radius: 2px; height: {{s.h}}; background: {{s.c}};"></span>
+          </sc-for>
+        </div>
+        <div style="font-size: 12.5px; color: #8A93A2;">42 runs · 0 failed · last 24h</div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 3px; border: 1px solid #23272E; border-radius: 8px; padding: 3px;">
+          <span style="font-size: 12px; padding: 4px 11px; border-radius: 6px; background: #191C21; color: #E9ECF1;">All</span>
+          <span style="font-size: 12px; padding: 4px 11px; color: #8A93A2;">Packaged</span>
+          <span style="font-size: 12px; padding: 4px 11px; color: #8A93A2;">Failed</span>
+        </div>
+      </div>
+
+      <div style="flex-grow: 1; padding: 0 26px 22px; display: flex; flex-direction: column; gap: 10px; overflow: hidden;">
+        <sc-for list="{{runs}}" as="r" hint-placeholder-count="5">
+          <div style="border: 1px solid {{r.border}}; border-radius: 11px; background: {{r.bg}}; padding: 15px 17px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: {{r.dot}}; flex-shrink: 0;"></span>
+              <span style="font-size: 13.5px; font-weight: 500; color: {{r.titleColor}};">{{r.title}}</span>
+              <span class="mono" style="margin-left: auto; font-size: 11.5px; color: #79828F;">{{r.meta}}</span>
+            </div>
+            <sc-if value="{{r.body}}" hint-placeholder-val="{{true}}">
+              <div style="font-size: 13px; line-height: 1.65; color: #99A1AE; margin-top: 8px; padding-left: 16px;">{{r.body}}</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#E8825A","options":["#E8825A","#7C9CF5","#4ADE80","#C084FC"],"section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const heights = [9,14,11,20,13,10,17,12,9,22,15,11,13,18,10,12,26,14,11,16,12,20,13,15];
+    return {
+      accent: this.props.accent ?? '#E8825A',
+      skills: ['youtube-strategy', 'thumbnails', 'brightdata-scraper'],
+      keys: [
+        { key: 'GEMINI_API_KEY', host: 'generativelanguage…', hostColor: '#8A93A2', locked: true },
+        { key: 'OPENROUTER_API_KEY', host: 'openrouter.ai', hostColor: '#8A93A2', locked: true },
+        { key: 'CHANNEL_ID', host: 'setting', hostColor: '#79828F', locked: false },
+      ],
+      spark: heights.map((h, i) => ({ h: h + 'px', c: i === 16 ? '#E8825A' : '#2A3138' })),
+      runs: [
+        { title: 'Idea #058 packaged — “I let Claude Code hack my own app”', meta: '12m ago · 3m 40s', body: 'Wrote the folder, README and thumbnail, added the dashboard row, posted to #nano-claw.', dot: '#E8825A', border: '#3A2A22', bg: 'rgba(232,130,90,0.05)', titleColor: '#E9ECF1' },
+        { title: 'No idea cleared the bar', meta: '1h ago · 1m 52s', body: 'Cowork browser rollout already thickly covered; GLM-5.3-Flash overlaps idea #057.', dot: '#4ADE80', border: '#1D2127', bg: '#101317', titleColor: '#C3CAD4' },
+        { title: 'No idea cleared the bar', meta: '2h ago · 2m 06s', body: '', dot: '#4ADE80', border: '#1D2127', bg: '#101317', titleColor: '#C3CAD4' },
+        { title: 'No idea cleared the bar', meta: '3h ago · 1m 44s', body: '', dot: '#4ADE80', border: '#1D2127', bg: '#101317', titleColor: '#C3CAD4' },
+        { title: 'Idea #057 packaged — “OpenCode + GLM-5.3 = full website”', meta: '5h ago · 4m 12s', body: '', dot: '#4ADE80', border: '#1D2127', bg: '#101317', titleColor: '#C3CAD4' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
