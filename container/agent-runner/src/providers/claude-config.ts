@@ -99,12 +99,21 @@ export function resolveClaudeExecutionPolicy(
   };
 }
 
-/** Model and reasoning effort pass to the SDK verbatim; the SDK owns defaults. */
+/**
+ * Model and reasoning effort pass to the SDK verbatim; the SDK owns defaults.
+ * `speed: 'fast'` maps to the SDK's `fastMode` settings key (the `/fast`
+ * toggle); other values are ignored rather than guessed at. Claude has no
+ * native tone knob, so `tone` is not part of this provider's inference input.
+ */
 export function resolveClaudeInference(
-  input: { model?: string; effort?: string },
+  input: { model?: string; effort?: string; speed?: string },
   _environment: NodeJS.ProcessEnv,
-): { model?: string; effort?: string } {
-  return { model: input.model, effort: input.effort };
+): { model?: string; effort?: string; settings?: { fastMode: boolean } } {
+  return {
+    model: input.model,
+    effort: input.effort,
+    ...(input.speed === 'fast' ? { settings: { fastMode: true } } : {}),
+  };
 }
 
 /**

@@ -204,7 +204,10 @@ export class ClaudeProvider implements AgentProvider {
     this.assistantName = options.assistantName;
     this.mcp = resolveClaudeMcpServers(options.mcpServers ?? {}, process.env);
     this.additionalDirectories = options.additionalDirectories;
-    this.inference = resolveClaudeInference({ model: options.model, effort: options.effort }, process.env);
+    this.inference = resolveClaudeInference(
+      { model: options.model, effort: options.effort, speed: options.speed },
+      process.env,
+    );
     this.executionPolicy = resolveClaudeExecutionPolicy(undefined, process.env);
     this.env = {
       ...(options.env ?? {}),
@@ -247,6 +250,7 @@ export class ClaudeProvider implements AgentProvider {
         disallowedTools: this.executionPolicy.disallowedTools,
         env: this.env,
         model: this.inference.model,
+        settings: this.inference.settings,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         effort: this.inference.effort as any,
         permissionMode: this.executionPolicy.permissionMode,

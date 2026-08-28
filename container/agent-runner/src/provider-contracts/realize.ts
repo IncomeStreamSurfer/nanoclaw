@@ -31,7 +31,7 @@ function configurationInputsFor(instance: AgentProvider | undefined): Partial<Ru
   if (!instance) return inputs;
   const options = providerOptions.get(instance);
   if (options) {
-    inputs.inference = { model: options.model, effort: options.effort };
+    inputs.inference = { model: options.model, effort: options.effort, tone: options.tone, speed: options.speed };
     inputs.mcpServers = options.mcpServers ?? {};
   }
   const hook = providerMemoryHooks.get(instance);

@@ -98,6 +98,17 @@ export interface ProviderOptions {
    * through to the underlying SDK. If omitted, the SDK default is used.
    */
   effort?: string;
+  /**
+   * Tone preset, mapped to the provider's native knob (e.g. Codex thread
+   * `personality`). Ignored by providers with no native equivalent.
+   */
+  tone?: string;
+  /**
+   * Speed tier, mapped to the provider's native knob (`'fast'` → Claude's
+   * `fastMode` setting, Codex's `service_tier`). Ignored by providers with
+   * no native equivalent.
+   */
+  speed?: string;
   /** Core-owned provider I/O, bound to the selected provider by new core. */
   coreIo?: {
     realizeManagedFiles(when: RuntimeManagedFile['when']): void;

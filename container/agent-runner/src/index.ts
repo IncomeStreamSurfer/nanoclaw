@@ -116,6 +116,8 @@ async function main(): Promise<void> {
     additionalDirectories: additionalDirectories.length > 0 ? additionalDirectories : undefined,
     model: config.model,
     effort: config.effort,
+    tone: config.tone,
+    speed: config.speed,
   });
   registerProviderMemorySessionHook(providerName, provider, MEMORY_SESSION_HOOK);
 

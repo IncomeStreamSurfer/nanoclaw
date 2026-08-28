@@ -26,6 +26,8 @@ export interface ContainerConfigRow {
   additional_mounts: string; // JSON: AdditionalMountConfig[]
   cli_scope: string; // 'disabled' | 'group' | 'global'
   timezone: string | null; // IANA id; NULL = follow the install-global timezone
+  tone: string | null; // provider-mapped tone preset (e.g. Codex personality); NULL = provider default
+  speed: string | null; // provider-mapped speed tier (e.g. 'fast'); NULL = provider default
   /**
    * Session isolation tier ('container' | 'vm') — see SessionSpec.runtimeTier.
    * Optional on the TS type because the trunk schema does not carry the

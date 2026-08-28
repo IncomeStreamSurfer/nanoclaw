@@ -249,6 +249,10 @@ export interface ContainerConfig {
   maxMessagesPerPrompt?: number;
   model?: string;
   effort?: string;
+  /** Provider-mapped tone preset (e.g. Codex `personality`); absent = provider default. */
+  tone?: string;
+  /** Provider-mapped speed tier (e.g. `fast`); absent = provider default. */
+  speed?: string;
   timezone?: string;
   /** Session isolation tier for the group's containers; absent = the composer's default ('container'). */
   runtimeTier?: 'container' | 'vm';
@@ -370,6 +374,8 @@ export function configFromDb(row: ContainerConfigRow, group: AgentGroup): Contai
     maxMessagesPerPrompt: row.max_messages_per_prompt ?? undefined,
     model: row.model ?? undefined,
     effort: row.effort ?? undefined,
+    tone: row.tone ?? undefined,
+    speed: row.speed ?? undefined,
     timezone: row.timezone && isValidTimezone(row.timezone) ? row.timezone : undefined,
     runtimeTier: parseRuntimeTier(row.runtime_tier, group.name),
   };
