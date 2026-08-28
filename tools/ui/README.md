@@ -25,7 +25,12 @@ mounts, install skills and wire channels).
   rendered inline — bare paths, backticked paths and markdown images all work,
   served only from the mount allowlist and the groups directory.
 - **Channels** — connect a Discord channel to a bot.
-- **Schedules** — run / pause / resume, last result and full run history.
+- **Schedules** — a picker, not a cron field: Every hour / 6 hours / day /
+  weekdays / week, or custom cron. It shows the next three runs in plain words
+  before you save, validates the expression, and warns when a schedule exceeds
+  NanoClaw'''s 4-runs-a-day guard (with the token cost spelled out) rather than
+  failing with a CLI error. Add, edit or delete a schedule for any bot; run /
+  pause / resume, last result and full run history.
 
 Light and dark themes; the toggle sits in the host-status box.
 

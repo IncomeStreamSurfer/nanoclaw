@@ -282,6 +282,47 @@
   <div class="dlg-f"><div style="margin-left:auto"><button onclick="dlgSkills.close()">Close</button></div></div>
 </dialog>
 
+<dialog id="dlgSched">
+  <div class="dlg-h"><h3 id="schTitle">Schedule</h3>
+    <div class="muted" style="margin-top:5px" id="schWho"></div></div>
+  <div class="dlg-b">
+    <label>How often</label>
+    <div class="filters" id="schPresets"></div>
+
+    <div id="schTimeWrap" style="display:none">
+      <label>At what time <span class="hint">— your local time</span></label>
+      <input type="time" id="schTime" value="09:00" style="width:160px">
+    </div>
+
+    <div id="schDayWrap" style="display:none">
+      <label>Which day</label>
+      <select id="schDay" style="width:200px">
+        <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+        <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
+      </select>
+    </div>
+
+    <div id="schCronWrap" style="display:none">
+      <label>Cron expression <span class="hint">— minute hour day month weekday</span></label>
+      <input id="schCron" placeholder="0 9 * * *" style="width:100%;font-family:'Geist Mono',monospace">
+    </div>
+
+    <div id="schPromptWrap">
+      <label>What should it do each time?</label>
+      <textarea id="schPrompt" style="min-height:70px" placeholder="Leave blank to run its mission."></textarea>
+    </div>
+
+    <div id="schPreview" style="margin-top:16px"></div>
+  </div>
+  <div class="dlg-f">
+    <button class="danger" id="schDelete" style="display:none" onclick="deleteSchedule()">Delete schedule</button>
+    <div style="margin-left:auto" class="row">
+      <button onclick="dlgSched.close()">Cancel</button>
+      <button class="primary" id="schSave" onclick="saveSchedule(false)">Save schedule</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dlgUpdate">
   <div class="dlg-h"><h3>Update NanoClaw</h3>
     <div class="muted" style="margin-top:5px" id="upSub">Checking for updates…</div></div>
@@ -446,7 +487,7 @@ function viewChannels(){
 
 function viewSchedules(){
   const ts=S.tasks.filter(t=>!String(t.series_id||t.id).startsWith('ui-'));
-  $('view').innerHTML=ts.length?`<div class="cards">${ts.map(t=>{const id=t.series_id||t.id,g=S.groups.find(x=>x.id===t.agent_group_id);
+  $('view').innerHTML=(ts.length?`<div class="cards">${ts.map(t=>{const id=t.series_id||t.id,g=S.groups.find(x=>x.id===t.agent_group_id);
     return `<div class="card">
       <div class="row"><h3>${esc(g?.name||id)}</h3><span class="chip">${esc(t.status)}</span></div>
       <div class="muted" style="margin-top:6px">Runs <span class="mono" style="color:var(--text)">${esc(t.recurrence||'once')}</span> · ${t.completed_runs??0} runs${t.failed_runs?` · ${t.failed_runs} failed`:''}</div>
@@ -454,10 +495,12 @@ function viewSchedules(){
         <button onclick="task('${id}','run')">Run now</button>
         ${t.status==='paused'?`<button onclick="task('${id}','resume')">Resume</button>`:`<button onclick="task('${id}','pause')">Pause</button>`}
         <button onclick="showHistory('${id}',this)">All runs</button>
+        <button onclick="openSchedule('${t.agent_group_id}', S.tasks.find(x=>(x.series_id||x.id)==='${id}'))">Edit</button>
       </div>
       ${t.last_result?`<div class="out" style="margin:12px 0 0"><div class="txt" style="max-height:150px">${esc(t.last_result)}</div></div>`:''}
       <div class="out hist" style="margin:12px 0 0;display:none"><div class="txt" style="max-height:260px"></div></div>
-    </div>`;}).join('')}</div>`:'<div class="muted">No scheduled jobs. Add a schedule when you create a bot.</div>';
+    </div>`;}).join('')}</div>`:'<div class="muted" style="padding:8px 0">Nothing runs on a schedule yet.</div>')
+    +`<div class="row" style="margin-top:16px">${S.groups.map(g=>`<button onclick="openSchedule('${g.id}')">+ Schedule ${esc(g.name)}</button>`).join('')}</div>`;
 }
 
 function viewSkills(){
@@ -553,6 +596,145 @@ function runCard(r){
     <div class="rb md ${long&&!open?'clip':''}">${md(r.text)}</div>
     ${long?`<button class="more" onclick="runsExpanded['${key}']=${!open};render()">${open?'Show less':'Show more'}</button>`:''}
   </div>`;
+}
+
+
+/* ── scheduling ───────────────────────────────────────────────── */
+const PRESETS=[
+  {k:'hourly',  label:'Every hour',      cron:()=>'0 * * * *',                                 perDay:24},
+  {k:'6h',      label:'Every 6 hours',   cron:()=>'0 */6 * * *',                               perDay:4},
+  {k:'daily',   label:'Every day',       cron:(h,m)=>`${m} ${h} * * *`,      time:true,        perDay:1},
+  {k:'weekdays',label:'Weekdays',        cron:(h,m)=>`${m} ${h} * * 1-5`,    time:true,        perDay:1},
+  {k:'weekly',  label:'Every week',      cron:(h,m,d)=>`${m} ${h} * * ${d}`, time:true, day:true, perDay:0.14},
+  {k:'custom',  label:'Custom cron',     cron:null,                                            perDay:null},
+];
+let schAgent=null, schTask=null, schPreset='daily';
+
+function cronField(f,min,max){
+  const out=new Set();
+  for(const part of String(f).split(',')){
+    const [range,stepRaw]=part.split('/'); const step=stepRaw?parseInt(stepRaw,10):1;
+    if(!step||step<1) return null;
+    let lo=min,hi=max;
+    if(range!=='*'){
+      const m=range.match(/^(\d+)(?:-(\d+))?$/); if(!m) return null;
+      lo=parseInt(m[1],10); hi=m[2]!==undefined?parseInt(m[2],10):(stepRaw?max:lo);
+    }
+    if(lo<min||hi>max||lo>hi) return null;
+    for(let v=lo;v<=hi;v+=step) out.add(v);
+  }
+  return out;
+}
+function parseCron(expr){
+  const f=String(expr||'').trim().split(/\s+/);
+  if(f.length!==5) return null;
+  const mi=cronField(f[0],0,59), h=cronField(f[1],0,23), dom=cronField(f[2],1,31), mo=cronField(f[3],1,12), dow=cronField(f[4],0,7);
+  if(!mi||!h||!dom||!mo||!dow) return null;
+  if(dow.has(7)) dow.add(0);
+  return {mi,h,dom,mo,dow,domRestricted:f[2]!=='*',dowRestricted:f[4]!=='*'};
+}
+function nextRuns(expr,n=3){
+  const c=parseCron(expr); if(!c) return null;
+  const out=[]; const d=new Date(); d.setSeconds(0,0); d.setMinutes(d.getMinutes()+1);
+  for(let i=0;i<527040&&out.length<n;i++){
+    if(c.mi.has(d.getMinutes())&&c.h.has(d.getHours())&&c.mo.has(d.getMonth()+1)){
+      const domOk=c.dom.has(d.getDate()), dowOk=c.dow.has(d.getDay());
+      const dateOk=(c.domRestricted&&c.dowRestricted)?(domOk||dowOk):(domOk&&dowOk);
+      if(dateOk) out.push(new Date(d));
+    }
+    d.setMinutes(d.getMinutes()+1);
+  }
+  return out;
+}
+function runsPerDay(expr){
+  const runs=nextRuns(expr,60); if(!runs||!runs.length) return null;
+  if(runs.length<2) return 0.1;
+  const spanDays=(runs[runs.length-1]-runs[0])/86400000;
+  return spanDays>0?(runs.length-1)/spanDays:runs.length;
+}
+function fmtWhen(d){
+  const today=new Date(); const t0=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  const d0=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const days=Math.round((d0-t0)/86400000);
+  const time=d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  if(days===0) return `today at ${time}`;
+  if(days===1) return `tomorrow at ${time}`;
+  if(days<7) return `${d.toLocaleDateString([], {weekday:'long'})} at ${time}`;
+  return `${d.toLocaleDateString([], {day:'numeric',month:'short'})} at ${time}`;
+}
+function currentCron(){
+  const P=PRESETS.find(p=>p.k===schPreset);
+  if(!P) return '';
+  if(P.k==='custom') return $('schCron').value.trim();
+  const [h,m]=($('schTime').value||'09:00').split(':').map(s=>parseInt(s,10));
+  return P.cron(h||0,m||0,$('schDay').value);
+}
+function schRender(){
+  $('schPresets').innerHTML=PRESETS.map(p=>`<span class="fchip ${schPreset===p.k?'on':''}" onclick="schPreset='${p.k}';schRender()">${p.label}</span>`).join('');
+  const P=PRESETS.find(p=>p.k===schPreset);
+  $('schTimeWrap').style.display=P.time?'block':'none';
+  $('schDayWrap').style.display=P.day?'block':'none';
+  $('schCronWrap').style.display=P.k==='custom'?'block':'none';
+  const cron=currentCron();
+  const runs=cron?nextRuns(cron,3):null;
+  const box=$('schPreview');
+  if(!cron){ box.innerHTML='<div class="muted">Pick a schedule.</div>'; $('schSave').disabled=true; return; }
+  if(!runs){ box.innerHTML=`<div class="note" style="border-color:var(--bad);background:transparent">That isn't a valid cron expression. Five fields: <span class="mono">minute hour day month weekday</span> — e.g. <span class="mono">0 9 * * *</span> for 9am daily.</div>`; $('schSave').disabled=true; return; }
+  $('schSave').disabled=false;
+  const per=runsPerDay(cron);
+  const tooOften=per>4.01;
+  box.innerHTML=`
+    <div class="card" style="padding:14px 16px">
+      <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">Next runs</div>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
+        ${runs.map(r=>`<div style="font-size:13.5px">${fmtWhen(r)}</div>`).join('')}
+      </div>
+      <div class="row" style="margin-top:12px;justify-content:space-between">
+        <span class="mono" style="font-size:11.5px;color:var(--faint)">${esc(cron)}</span>
+        <span class="muted" style="font-size:12px">${per>=1?`~${Math.round(per)}×/day`:`~${Math.round(per*7)}×/week`}</span>
+      </div>
+    </div>
+    ${tooOften?`<div class="note" style="border-color:var(--accent);background:var(--accent-soft);margin-top:12px">
+      <div>This runs <b style="color:var(--text)">${Math.round(per)} times a day</b>. NanoClaw caps schedules at 4/day by default because every run spends real tokens. Save it and you'll be asked to confirm.</div></div>`:''}`;
+}
+function openSchedule(agentId, task){
+  schAgent=agentId; schTask=task||null;
+  const g=S.groups.find(x=>x.id===agentId)||S.groups.find(x=>x.id===task?.agent_group_id);
+  $('schTitle').textContent=task?'Edit schedule':'New schedule';
+  $('schWho').textContent=g?`${g.name} — runs on its own, no one watching.`:'';
+  $('schDelete').style.display=task?'inline-flex':'none';
+  $('schPromptWrap').style.display=task?'none':'block';
+  $('schPrompt').value='';
+  const cron=task?.recurrence||'';
+  const m=cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+(\*|1-5|\d)$/);
+  if(cron==='0 * * * *') schPreset='hourly';
+  else if(cron==='0 */6 * * *') schPreset='6h';
+  else if(m&&m[3]==='*'){schPreset='daily';$('schTime').value=`${m[2].padStart(2,'0')}:${m[1].padStart(2,'0')}`;}
+  else if(m&&m[3]==='1-5'){schPreset='weekdays';$('schTime').value=`${m[2].padStart(2,'0')}:${m[1].padStart(2,'0')}`;}
+  else if(m){schPreset='weekly';$('schTime').value=`${m[2].padStart(2,'0')}:${m[1].padStart(2,'0')}`;$('schDay').value=m[3];}
+  else if(cron){schPreset='custom';$('schCron').value=cron;}
+  else schPreset='daily';
+  schRender(); dlgSched.showModal();
+}
+async function saveSchedule(force){
+  const cron=currentCron(); if(!cron) return;
+  const per=runsPerDay(cron);
+  if(per>4.01&&!force){
+    if(!confirm(`This runs about ${Math.round(per)} times a day — roughly ${Math.round(per*30)} agent runs a month, each spending tokens.\n\nSchedule it anyway?`)) return;
+    force=true;
+  }
+  const r=schTask
+    ? await api(`/api/tasks/${schTask.series_id||schTask.id}/reschedule`,{cron,force})
+    : await api(`/api/agents/${schAgent}/schedule`,{cron,force,prompt:$('schPrompt').value.trim()||undefined});
+  if(!r.ok&&r.error==='too-frequent'){ toast('NanoClaw refused that frequency even with the override.',false); return; }
+  if(!r.ok){ toast('Failed: '+errMsg(r),false); return; }
+  dlgSched.close(); toast(schTask?'Schedule updated':'Schedule created'); refresh();
+}
+async function deleteSchedule(){
+  if(!schTask) return;
+  if(!confirm('Delete this schedule? The bot stays, it just stops running on its own.')) return;
+  const r=await api(`/api/tasks/${schTask.series_id||schTask.id}/delete`,{});
+  dlgSched.close(); toast(r.ok?'Schedule deleted':'Failed: '+errMsg(r), r.ok); refresh();
 }
 
 /* ── updating NanoClaw ─────────────────────────────────────── */
@@ -683,6 +865,7 @@ async function task(id,a){const r=await api(`/api/tasks/${id}/${a}`,{});toast(r.
 async function showHistory(id,btn){const box=btn.closest('.card').querySelector('.out.hist');const txt=box.querySelector('.txt');
   const r=await api(`/api/tasks/${id}/history`);txt.textContent=r.ok?r.data:'Failed: '+errMsg(r);box.style.display='block';}
 
+for(const id of ['schTime','schDay','schCron']) $(id).addEventListener('input',schRender);
 refresh();loadRuns();checkUpdate();setInterval(()=>{refresh();loadRuns();},20000);setInterval(checkUpdate,3600000);
 </script>
 </body>

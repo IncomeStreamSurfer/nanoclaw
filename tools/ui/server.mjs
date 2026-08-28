@@ -565,14 +565,31 @@ async function handleApi(req, res, url, body) {
     }
 
     if (req.method === 'POST' && parts[1] === 'agents' && parts[3] === 'schedule') {
-      const { prompt, cron, name } = body;
-      if (!prompt?.trim() || !cron?.trim()) return send(400, { ok: false, error: 'prompt and cron required' });
-      const args = ['tasks', 'create', '--group', parts[2], '--name', name?.trim() || 'ui-job', '--recurrence', cron, '--prompt', prompt];
+      const { prompt, cron, name, force } = body;
+      if (!cron?.trim()) return send(400, { ok: false, error: 'a schedule is required' });
+      const args = ['tasks', 'create', '--group', parts[2], '--name', name?.trim() || 'schedule',
+        '--recurrence', cron.trim(),
+        '--prompt', prompt?.trim() || 'Run your mission now, per your standing instructions, and report the result.'];
+      if (force) args.push('--dangerously-override-recurrence-limit');
       const created = await ncl(args);
-      if (!created.ok && /recurrence|frequent|quota/i.test(JSON.stringify(created.error)))
-        return send(400, { ok: false, error: 'Schedule too frequent (max 4 runs/day without an override). Use a wider cron like "0 9 * * *".' });
+      if (!created.ok && /recurrence|frequent|quota|limit/i.test(JSON.stringify(created.error || '')))
+        return send(400, { ok: false, error: 'too-frequent' });
       return send(created.ok ? 200 : 500, created);
     }
+
+    if (req.method === 'POST' && parts[1] === 'tasks' && parts[3] === 'reschedule') {
+      const { cron, force } = body;
+      if (!cron?.trim()) return send(400, { ok: false, error: 'a schedule is required' });
+      const args = ['tasks', 'update', '--id', parts[2], '--recurrence', cron.trim()];
+      if (force) args.push('--dangerously-override-recurrence-limit');
+      const r = await ncl(args);
+      if (!r.ok && /recurrence|frequent|quota|limit/i.test(JSON.stringify(r.error || '')))
+        return send(400, { ok: false, error: 'too-frequent' });
+      return send(r.ok ? 200 : 500, r);
+    }
+
+    if (req.method === 'POST' && parts[1] === 'tasks' && parts[3] === 'delete')
+      return send(200, await ncl(['tasks', 'delete', '--id', parts[2]]));
 
     if (req.method === 'POST' && parts[1] === 'tasks' && ['pause', 'resume', 'run', 'cancel'].includes(parts[3]))
       return send(200, await ncl(['tasks', parts[3], parts[2]]));
