@@ -54,6 +54,14 @@ async function vaultListFor(botFolder) {
 }
 
 async function getState() {
+  // A checkout with no NanoClaw install has no host socket — say so plainly
+  // instead of letting every call fail with a confusing CLI error.
+  const hostReady = fs.existsSync(path.join(ROOT, 'data', 'ncl.sock'));
+  if (!hostReady) {
+    return { hostReady: false, groups: [], wirings: [], messagingGroups: [], tasks: [],
+      groupConfigs: {}, providers: PROVIDERS, templates: [], channels: { discord: { installed: false } },
+      stats: { runsToday: 0, failedToday: 0, vaultKeys: 0, nextRunMs: null } };
+  }
   const [groups, wirings, messagingGroups, tasks] = await Promise.all([
     ncl(['groups', 'list']),
     ncl(['wirings', 'list']),
@@ -117,6 +125,7 @@ async function getState() {
   const nextRunMs = upcoming.length ? upcoming[0] - Date.now() : null;
 
   return {
+    hostReady: true,
     groups: groups.data || [], wirings: wirings.data || [], messagingGroups: messagingGroups.data || [],
     tasks: taskList, groupConfigs, providers: PROVIDERS, templates,
     channels: { discord: { installed: discordInstalled } },

@@ -330,6 +330,20 @@ async function refresh(){
 
 function render(){
   if(!S) return;
+  if(S.hostReady===false){
+    $('nav').innerHTML=''; $('pageTitle').textContent='Setup needed'; $('pageSub').textContent='';
+    const hb=document.querySelector('.hoststat .box');
+    if(hb){hb.querySelector('span.dot').style.background='var(--idle)';
+      hb.querySelectorAll('span')[1].textContent='Not set up';
+      $('hostBots').textContent='—';}
+    $('view').innerHTML=`<div class="card" style="max-width:640px">
+      <h3>NanoClaw isn't set up in this checkout yet</h3>
+      <div class="muted" style="margin:10px 0 16px;line-height:1.65">The console drives a NanoClaw install — the container sandbox, the credential vault and the host service. Run the installer once, in this folder, then reload this page:</div>
+      <pre style="background:var(--code);border:1px solid var(--line-2);border-radius:8px;padding:14px 16px;font:13px 'Geist Mono',monospace;color:var(--text);overflow-x:auto">bash nanoclaw.sh</pre>
+      <div class="muted" style="margin-top:14px;line-height:1.65">It walks through dependencies, builds the agent sandbox image, sets up the vault and connects your Claude account. Takes about ten minutes the first time. Full guide: <a href="https://bit.ly/3UXV7wr" target="_blank" rel="noopener">nanoclaw.dev</a></div>
+    </div>`;
+    return;
+  }
   const counts={bots:S.groups.length,runs:runsTotal??'',channels:S.messagingGroups.length,schedules:S.tasks.filter(t=>!String(t.series_id||t.id).startsWith('ui-')).length,skills:''};
   $('nav').innerHTML=PAGES.map(([k,label])=>`<a class="${page===k?'on':''}" onclick="go('${k}')">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${page===k?'var(--accent)':'var(--muted)'}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>
