@@ -149,6 +149,10 @@
   .md pre code{background:none;border:none;padding:0}
   .md blockquote{margin:0 0 12px;padding:2px 0 2px 14px;border-left:2px solid var(--line-3);color:var(--muted)}
   .md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .md .shot{margin:12px 0;display:inline-block;max-width:min(520px,100%)}
+  .md .shot.gone{display:none}
+  .md .shot img{display:block;width:100%;height:auto;border:1px solid var(--line-2);border-radius:10px;background:var(--surface-2)}
+  .md .shot figcaption{font:11.5px "Geist Mono",monospace;color:var(--faint);margin-top:6px;word-break:break-all}
   .md a{color:var(--accent);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--accent-line)}
   .md a:hover{text-decoration-color:var(--accent)}
   .drop{border:2px dashed var(--line-3);border-radius:10px;padding:22px;text-align:center;color:var(--muted);font-size:13px}
@@ -435,10 +439,16 @@ function md(src){
   const stash=(h)=>{keep.push(h);return S1+(keep.length-1)+S2;};
   let s=esc(String(src||''));
   s=s.replace(/```[a-z]*\n?([\s\S]*?)```/gi,(m,c)=>stash('<pre>'+c.replace(/\n$/,'')+'</pre>'));
-  s=s.replace(/`([^`\n]+)`/g,(m,c)=>stash('<code>'+c+'</code>'));
+  // images: ![alt](path), then bare/backticked image paths the agent wrote
+  const IMG=/\.(?:jpe?g|png|gif|webp|svg)$/i;
+  const fig=(p,alt)=>{const u=/^https?:/.test(p)?p:'/api/file?p='+encodeURIComponent(p);
+    return stash('<figure class="shot"><a href="'+u+'" target="_blank" rel="noopener"><img src="'+u+'" alt="'+(alt||p)+'" loading="lazy" onerror="this.closest(&quot;figure&quot;).classList.add(&quot;gone&quot;)"></a><figcaption>'+p+'</figcaption></figure>');};
+  s=s.replace(/!\[([^\]\n]*)\]\(([^)\s]+)\)/g,(m,alt,p)=>IMG.test(p)||/^https?:/.test(p)?fig(p,alt):m);
+  s=s.replace(/`([^`\n]+)`/g,(m,c)=>IMG.test(c.trim())?fig(c.trim(),''):stash('<code>'+c+'</code>'));
   s=s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g,(m,tx,u)=>stash('<a href="'+u+'" target="_blank" rel="noopener noreferrer">'+tx+'</a>'));
   s=s.replace(/https?:\/\/[^\s<>()]+/g,u=>stash('<a href="'+u+'" target="_blank" rel="noopener noreferrer">'+u+'</a>'));
   s=s.replace(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+\/[^\s<>()]*)/gi,d=>stash('<a href="https://'+d+'" target="_blank" rel="noopener noreferrer">'+d+'</a>'));
+  s=s.replace(/(^|[\s(])((?:[\w-]+\/)+[\w.-]+\.(?:jpe?g|png|gif|webp))(?=[\s,.)]|$)/gi,(m,pre,pp)=>pre+fig(pp,''));
   // the run log collapses newlines — re-break inline numbered lists so they scan
   s=s.replace(/(?!^)[ \t]+(\d{1,2})\.[ \t]+(?=\S)/g,'\n$1. ');
   s=s.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');

@@ -142,6 +142,32 @@ async function handleApi(req, res, url, body) {
       return send(200, { ok: true, data: created.data });
     }
 
+    // ── Serve an image a run referenced, from allowlisted roots only ───────
+    if (req.method === 'GET' && url.pathname === '/api/file') {
+      const raw = url.searchParams.get('p') || '';
+      const ext = path.extname(raw).toLowerCase();
+      const TYPES = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
+      if (!TYPES[ext]) return send(400, { ok: false, error: 'not an image path' });
+      // Roots an agent can legitimately have written to.
+      const roots = [path.join(ROOT, 'groups')];
+      try {
+        const allow = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config', 'nanoclaw', 'mount-allowlist.json'), 'utf8'));
+        for (const r of allow.allowedRoots || []) if (r.path) roots.push(path.resolve(r.path));
+      } catch {}
+      // Container paths map back to their host root; relative paths are tried under each.
+      const rel = raw.replace(/^\/workspace\/(?:extra|group|project)\/[^/]*\/?/, '').replace(/^\/+/, '');
+      const candidates = [];
+      if (path.isAbsolute(raw)) candidates.push(path.resolve(raw));
+      for (const r of roots) candidates.push(path.resolve(r, rel));
+      for (const c of candidates) {
+        const inRoot = roots.some(r => c === r || c.startsWith(r + path.sep));
+        if (!inRoot || !fs.existsSync(c) || !fs.statSync(c).isFile()) continue;
+        res.writeHead(200, { 'content-type': TYPES[ext], 'cache-control': 'max-age=300' });
+        return res.end(fs.readFileSync(c));
+      }
+      return send(404, { ok: false, error: 'not found in an allowed root' });
+    }
+
     // ── Runs feed: every run entry across every bot, newest first ──────────
     if (req.method === 'GET' && url.pathname === '/api/runs') {
       const groupsDir = path.join(ROOT, 'groups');
