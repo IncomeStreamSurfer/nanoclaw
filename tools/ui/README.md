@@ -17,6 +17,11 @@ mounts, install skills and wire channels).
 - **Keys** — per bot. Give a key an *API host* and it goes to the OneCLI vault,
   injected into requests to that host; the bot never sees the value. Without a
   host it's a plain setting in `groups/<bot>/bot.env`.
+- **Mission** — edit a bot'''s standing instructions any time, not just at
+  creation. It restarts to pick them up.
+- **Folders** — mount a folder so the bot can read and write real files. Bounded
+  by NanoClaw'''s mount allowlist: a folder outside it is refused, and widening
+  the allowlist is a separate, explicit confirmation that says what it means.
 - **Skills** — add per-bot from a GitHub URL or a dropped `.zip`; the bot
   restarts to pick them up.
 - **Runs** — every run from every bot in one scrollable feed, newest first, with

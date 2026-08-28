@@ -456,6 +456,59 @@ async function handleApi(req, res, url, body) {
       }
     }
 
+    // ── Folders a bot can read/write, and the allowlist that bounds them ──
+    if (parts[1] === 'agents' && parts[3] === 'mounts') {
+      const allowPath = path.join(process.env.HOME, '.config', 'nanoclaw', 'mount-allowlist.json');
+      const readAllow = () => { try { return JSON.parse(fs.readFileSync(allowPath, 'utf8')); } catch { return { allowedRoots: [], blockedPatterns: [], nonMainReadOnly: false }; } };
+      if (req.method === 'GET') {
+        const cfg = await ncl(['groups', 'config', 'get', '--id', parts[2]]);
+        return send(200, { ok: true, data: { mounts: cfg.data?.additional_mounts || [], allowedRoots: (readAllow().allowedRoots || []).map(r => r.path) } });
+      }
+      if (req.method === 'POST' && body.remove) {
+        return send(200, await ncl(['groups', 'config', 'remove-mount', '--id', parts[2], '--host', body.remove.hostPath, '--container', body.remove.containerPath]));
+      }
+      if (req.method === 'POST') {
+        let { hostPath, containerPath, allowRoot } = body;
+        if (!hostPath?.trim()) return send(400, { ok: false, error: 'pick a folder' });
+        hostPath = path.resolve(hostPath.replace(/^~/, process.env.HOME || '~').trim());
+        if (!fs.existsSync(hostPath) || !fs.statSync(hostPath).isDirectory())
+          return send(400, { ok: false, error: `${hostPath} is not a folder on this machine.` });
+        containerPath = (containerPath || path.basename(hostPath)).replace(/[^A-Za-z0-9._-]/g, '-');
+        const allow = readAllow();
+        const roots = (allow.allowedRoots || []).map(r => path.resolve(r.path));
+        const covered = roots.some(r => hostPath === r || hostPath.startsWith(r + path.sep));
+        if (!covered) {
+          if (!allowRoot) return send(400, { ok: false, error: 'not-allowlisted', hostPath, roots });
+          // Operator explicitly consented to widen the allowlist.
+          allow.allowedRoots = allow.allowedRoots || [];
+          allow.allowedRoots.push({ path: hostPath, allowReadWrite: true, description: 'added from the console' });
+          fs.mkdirSync(path.dirname(allowPath), { recursive: true });
+          fs.writeFileSync(allowPath, JSON.stringify(allow, null, 2) + '\n');
+        }
+        const r = await ncl(['groups', 'config', 'add-mount', '--id', parts[2], '--host', hostPath, '--container', containerPath]);
+        if (r.ok) await ncl(['groups', 'restart', '--id', parts[2]]);
+        return send(r.ok ? 200 : 500, r);
+      }
+    }
+
+    // ── The bot's standing instructions ───────────────────────────────────
+    if (req.method === 'POST' && parts[1] === 'agents' && parts[3] === 'mission') {
+      const g = (await ncl(['groups', 'get', '--id', parts[2]])).data;
+      if (!g?.folder) return send(404, { ok: false, error: 'agent not found' });
+      const f = path.join(ROOT, 'groups', g.folder, 'instructions.prepend.md');
+      const existing = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
+      const mission = String(body.mission || '').trim();
+      let out;
+      if (/## Your mission\n/.test(existing)) {
+        out = existing.replace(/(## Your mission\n)[\s\S]*?(\n## |$)/, `$1${mission}\n$2`);
+      } else {
+        out = `# ${g.name}\n\n## Your mission\n${mission}\n\n## Operating rules\n- When asked to "run your mission", perform it once end-to-end, then reply with a concise report of what you did and the result.\n`;
+      }
+      fs.writeFileSync(f, out);
+      await ncl(['groups', 'restart', '--id', parts[2]]);
+      return send(200, { ok: true });
+    }
+
     // ── Per-bot skills: GitHub URL or uploaded zip → agent skills overlay ──
     if (parts[1] === 'agents' && parts[3] === 'skills') {
       const overlay = path.join(ROOT, 'data', 'v2-sessions', parts[2], '.claude-shared', 'skills');
