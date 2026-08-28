@@ -88,6 +88,8 @@ export class CodexProvider implements AgentProvider {
   private readonly mcpServers: Record<string, McpServerConfig>;
   private readonly model?: string;
   private readonly effort?: CodexReasoningEffort;
+  private readonly tone?: string;
+  private readonly speed?: string;
   private readonly runtime: CodexRuntimeDeps;
   private readonly coreIo?: NonNullable<CoreProviderOptions['coreIo']>;
   private memorySessionHook?: CodexMemorySessionHook;
@@ -98,6 +100,10 @@ export class CodexProvider implements AgentProvider {
     this.model = options.model;
     this.runtime = runtime;
     this.effort = normalizeCodexEffort(options.effort);
+    this.tone = options.tone;
+    // Mirror codexInferenceSection: speed is a fast-or-default flag on both
+    // write paths, so a hand-edited DB value cannot skew the legacy TOML.
+    this.speed = options.speed === 'fast' ? 'fast' : undefined;
     this.coreIo = coreOptions.coreIo;
   }
 
@@ -147,7 +153,12 @@ export class CodexProvider implements AgentProvider {
       // direct writer covers cores that predate the runtime contract. Both
       // paths serialize through the same plan sections.
       if (self.coreIo) self.coreIo.realizeManagedFiles('before-query', undefined);
-      else self.runtime.writeCodexConfigToml(self.mcpServers, memorySessionHook, { model: self.model, effort: self.effort });
+      else
+        self.runtime.writeCodexConfigToml(self.mcpServers, memorySessionHook, {
+          model: self.model,
+          effort: self.effort,
+          speed: self.speed,
+        });
       const server = self.runtime.spawnCodexAppServer();
       activeServer = server;
       self.runtime.attachCodexAutoApproval(server);
@@ -161,6 +172,7 @@ export class CodexProvider implements AgentProvider {
           model: self.model,
           cwd: input.cwd,
           baseInstructions: input.systemContext?.instructions,
+          tone: self.tone,
         });
         activeThreadId = threadId;
 

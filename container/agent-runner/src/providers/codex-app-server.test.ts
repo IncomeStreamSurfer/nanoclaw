@@ -8,6 +8,7 @@ import {
   CODEX_APP_SERVER_ARGS,
   attachCodexAutoApproval,
   buildCodexConfigPlan,
+  codexInferenceSection,
   buildCodexProcessEnv,
   renderCodexConfigToml,
   startOrResumeCodexThread,
@@ -88,6 +89,25 @@ describe('Codex config TOML', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  it('renders service_tier and the fast_mode feature only when speed is set', () => {
+    const withSpeed = renderCodexConfigToml(buildCodexConfigPlan({}, { speed: 'fast' }));
+    expect(withSpeed).toContain('service_tier = "fast"');
+    expect(withSpeed).toContain('fast_mode = true');
+
+    const without = renderCodexConfigToml(buildCodexConfigPlan({}, {}));
+    expect(without).not.toContain('service_tier');
+    expect(without).not.toContain('fast_mode');
+  });
+
+  it('treats speed as a fast flag — other tier names are dropped, not passed through', () => {
+    const rendered = renderCodexConfigToml({
+      ...buildCodexConfigPlan({}, {}),
+      inference: codexInferenceSection({ speed: 'ultrafast' }),
+    });
+    expect(rendered).not.toContain('service_tier');
+    expect(rendered).not.toContain('fast_mode');
   });
 
   it('escapes basic strings', () => {
@@ -314,6 +334,16 @@ describe('Codex thread SessionStart source', () => {
 
     expect(requests[0].method).toBe('thread/resume');
     expect(requests[0].params.sessionStartSource).toBeUndefined();
+  });
+
+  it("defaults personality to 'friendly' and maps the core tone property when set", async () => {
+    const { server, requests } = autoRespondingServer();
+
+    await startOrResumeCodexThread(server, undefined, { cwd: '/workspace/agent' });
+    expect(requests[0].params.personality).toBe('friendly');
+
+    await startOrResumeCodexThread(server, undefined, { cwd: '/workspace/agent', tone: 'pragmatic' });
+    expect(requests[1].params.personality).toBe('pragmatic');
   });
 });
 
