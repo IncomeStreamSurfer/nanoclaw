@@ -48,3 +48,6 @@ AGENTS.md
 docs/maintainer-guide.md
 docs/drafts/
 forks.md
+
+# seeded design canvas (regenerate from the .dc.html artboards)
+tools/ui/design/nanoclaw-console.html

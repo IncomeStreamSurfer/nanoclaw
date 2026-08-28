@@ -27,8 +27,11 @@ const PROVIDERS = ['claude', 'codex', 'ollama'];
 
 // OneCLI vault — secrets stored here are injected by the gateway proxy into
 // requests to their host pattern; the agent never sees the value.
-const ONECLI_PROJECT = process.env.NANOCLAW_UI_ONECLI_PROJECT || 'wfogpqbpydcptdgg';
-const ONECLI_BIN = path.join(process.env.HOME || '', '.local', 'bin', 'onecli');
+// The OneCLI CLI resolves its own default project from its auth; only pass
+// --project when an operator deliberately overrides it.
+const ONECLI_PROJECT = process.env.NANOCLAW_UI_ONECLI_PROJECT || '';
+const projArgs = ONECLI_PROJECT ? ['--project', ONECLI_PROJECT] : [];
+const ONECLI_BIN = process.env.NANOCLAW_UI_ONECLI_BIN || 'onecli';
 function vault(args) {
   return new Promise((resolve) => {
     execFile(ONECLI_BIN, args, { timeout: 30_000 }, (err, stdout, stderr) => {
@@ -38,14 +41,14 @@ function vault(args) {
   });
 }
 async function vaultCreate(botFolder, key, value, host, inject, param) {
-  const args = ['secrets', 'create', '--project', ONECLI_PROJECT, '--name', `${botFolder}:${key}`,
+  const args = ['secrets', 'create', ...projArgs, '--name', `${botFolder}:${key}`,
     '--type', 'generic', '--host-pattern', host, '--path-pattern', '/*', '--value', value];
   if (inject === 'param') args.push('--param-name', param || key.toLowerCase());
   else args.push('--header-name', 'Authorization', '--value-format', 'Bearer {value}');
   return vault(args);
 }
 async function vaultListFor(botFolder) {
-  const r = await vault(['secrets', 'list', '--project', ONECLI_PROJECT]);
+  const r = await vault(['secrets', 'list', ...projArgs]);
   if (!r.ok || !Array.isArray(r.data)) return [];
   return r.data.filter(s => s.name?.startsWith(`${botFolder}:`)).map(s => ({ id: s.id, key: s.name.slice(botFolder.length + 1), host: s.hostPattern }));
 }
@@ -106,7 +109,7 @@ async function getState() {
       }
     }
   }
-  const vaultAll = await vault(['secrets', 'list', '--project', ONECLI_PROJECT]);
+  const vaultAll = await vault(['secrets', 'list', ...projArgs]);
   const vaultKeys = Array.isArray(vaultAll.data) ? vaultAll.data.length : 0;
   const upcoming = (tasks.data || [])
     .map(t => t.process_after && Date.parse(t.process_after.replace(' ', 'T') + (t.process_after.endsWith('Z') ? '' : 'Z')))

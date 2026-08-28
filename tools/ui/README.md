@@ -34,3 +34,23 @@ Light and dark themes; the toggle sits in the host-status box.
 - `server.mjs` — zero-dependency Node HTTP server, shells out to `bin/ncl --json`
 - `index.html` — the whole front end, no build step
 - `design/` — the design canvas the UI was built from (`.dc.html` artboards)
+
+## Install (any NanoClaw v2 checkout)
+
+```bash
+pnpm run ui
+```
+
+No build step and no dependencies beyond what NanoClaw already has. It shells
+out to this checkout's `bin/ncl`, so it manages whatever install it sits in.
+
+Optional environment:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `NANOCLAW_UI_PORT` | `7799` | Port to listen on (localhost only) |
+| `NANOCLAW_UI_ONECLI_BIN` | `onecli` | Path to the OneCLI binary, if not on `PATH` |
+| `NANOCLAW_UI_ONECLI_PROJECT` | *(CLI default)* | Override the vault project |
+
+Vault-backed keys need a working OneCLI gateway — the same one NanoClaw already
+uses for its own credentials. Everything else works without it.

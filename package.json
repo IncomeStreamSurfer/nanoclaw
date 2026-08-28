@@ -29,7 +29,8 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "ui": "node tools/ui/server.mjs"
   },
   "dependencies": {
     "@chat-adapter/discord": "4.29.0",
