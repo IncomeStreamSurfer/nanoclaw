@@ -124,11 +124,118 @@ async function getState() {
   };
 }
 
+// ── Updating NanoClaw itself ───────────────────────────────────────────────
+// Routine updates only. A release with [BREAKING] entries needs the project's
+// own /update-nanoclaw skill (staged worktree, migration gates, rollback), so
+// this refuses to apply one silently.
+function sh(cmd, args, opts = {}) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { cwd: ROOT, timeout: opts.timeout || 300_000, maxBuffer: 8 << 20, env: { ...process.env, HUSKY: '0' } },
+      (err, stdout, stderr) => resolve({ ok: !err, out: (stdout || '') + (stderr || ''), code: err?.code ?? 0 }));
+  });
+}
+const upstreamRemote = async () => {
+  const r = await sh('git', ['remote', '-v']);
+  const names = new Set(r.out.split('\n').map(l => l.split(/\s+/)[0]).filter(Boolean));
+  if (names.has('upstream')) return 'upstream';
+  const origin = await sh('git', ['remote', 'get-url', 'origin']);
+  if (/nanocoai\/nanoclaw/.test(origin.out)) return 'origin';
+  return names.has('origin') ? 'origin' : [...names][0];
+};
+let updateJob = null; // { running, steps:[{name,state,detail}], startedAt, rollback }
+
+async function updateCheck() {
+  const remote = await upstreamRemote();
+  await sh('git', ['fetch', remote, 'main', '--quiet'], { timeout: 120_000 });
+  const current = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+  const latestPkg = await sh('git', ['show', `${remote}/main:package.json`]);
+  let latest = current;
+  try { latest = JSON.parse(latestPkg.out).version; } catch {}
+  const behind = Number((await sh('git', ['rev-list', '--count', `HEAD..${remote}/main`])).out.trim()) || 0;
+  const dirty = (await sh('git', ['status', '--porcelain'])).out.trim();
+  const containerChanged = !!(await sh('git', ['diff', '--name-only', 'HEAD', `${remote}/main`, '--', 'container/'])).out.trim();
+  // Any [BREAKING] line in the changelog that is new to us.
+  const chDiff = await sh('git', ['diff', `HEAD..${remote}/main`, '--', 'CHANGELOG.md']);
+  const breaking = chDiff.out.split('\n')
+    .filter(l => l.startsWith('+') && /\[BREAKING\]/.test(l))
+    .map(l => l.replace(/^\+\s*-?\s*/, '').replace(/\[BREAKING\]\s*/, '').replace(/\*\*/g, '').slice(0, 220));
+  return { remote, current, latest, behind, dirty: dirty ? dirty.split('\n').length : 0, containerChanged, breaking, upToDate: behind === 0 };
+}
+
+async function updateApply(force) {
+  const info = await updateCheck();
+  if (info.upToDate) return { ok: false, error: 'Already up to date.' };
+  if (info.dirty) return { ok: false, error: `${info.dirty} uncommitted change(s) — commit or stash them first.` };
+  if (info.breaking.length && !force) return { ok: false, error: 'breaking', breaking: info.breaking };
+
+  const steps = [];
+  const step = (name) => { const s = { name, state: 'running', detail: '' }; steps.push(s); return s; };
+  const tag = `ui-update-rollback-${Date.now()}`;
+  updateJob = { running: true, steps, startedAt: Date.now(), rollback: tag, to: info.latest };
+
+  (async () => {
+    let s = step('Saving a rollback point');
+    const t = await sh('git', ['tag', '-f', tag]);
+    s.state = t.ok ? 'done' : 'failed'; s.detail = t.ok ? tag : t.out.slice(-200);
+    if (!t.ok) { updateJob.running = false; return; }
+
+    s = step(`Merging ${info.remote}/main`);
+    const m = await sh('git', ['-c', 'core.hooksPath=/dev/null', 'merge', `${info.remote}/main`, '-m', 'Update NanoClaw from upstream (via UI)']);
+    s.state = m.ok ? 'done' : 'failed'; s.detail = m.out.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+    if (!m.ok) { await sh('git', ['merge', '--abort']); updateJob.running = false; updateJob.failed = 'merge conflict — resolve it in a terminal'; return; }
+
+    s = step('Installing dependencies');
+    const i = await sh('pnpm', ['install', '--frozen-lockfile'], { timeout: 600_000 });
+    s.state = i.ok ? 'done' : 'failed'; s.detail = i.out.trim().split('\n').slice(-2).join(' ').slice(0, 300);
+
+    s = step('Building');
+    const b = await sh('pnpm', ['run', 'build'], { timeout: 600_000 });
+    s.state = b.ok ? 'done' : 'failed'; s.detail = b.out.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+    if (!b.ok) {
+      const r = step('Build failed — rolling back');
+      const rb = await sh('git', ['reset', '--hard', tag], { timeout: 120_000 });
+      await sh('pnpm', ['install', '--frozen-lockfile'], { timeout: 600_000 });
+      r.state = rb.ok ? 'done' : 'failed'; r.detail = rb.ok ? `restored ${tag}` : rb.out.slice(-200);
+      updateJob.running = false; updateJob.failed = 'build failed; rolled back'; return;
+    }
+
+    if (info.containerChanged) {
+      s = step('Rebuilding the agent sandbox (slow)');
+      const c = await sh('bash', ['container/build.sh'], { timeout: 1_800_000 });
+      s.state = c.ok ? 'done' : 'failed'; s.detail = c.out.trim().split('\n').slice(-2).join(' ').slice(0, 300);
+    }
+
+    s = step('Restarting NanoClaw');
+    const rs = await sh('bash', ['setup/lib/restart.sh'], { timeout: 180_000 });
+    s.state = rs.ok ? 'done' : 'failed'; s.detail = rs.out.trim().split('\n').slice(-2).join(' ').slice(0, 200);
+
+    s = step('Verifying');
+    let healthy = false;
+    for (let n = 0; n < 12 && !healthy; n++) {
+      await new Promise(r => setTimeout(r, 2500));
+      healthy = (await ncl(['groups', 'list'])).ok;
+    }
+    s.state = healthy ? 'done' : 'failed';
+    s.detail = healthy ? `now on v${info.latest}` : 'host did not come back — check logs/nanoclaw.error.log';
+    updateJob.running = false;
+    if (!healthy) updateJob.failed = 'host did not come back';
+  })().catch(e => { updateJob.running = false; updateJob.failed = String(e.message || e); });
+
+  return { ok: true, data: { started: true, to: info.latest, rollback: tag } };
+}
+
 async function handleApi(req, res, url, body) {
   const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
   const parts = url.pathname.split('/').filter(Boolean); // api, ...
   try {
     if (req.method === 'GET' && url.pathname === '/api/state') return send(200, await getState());
+
+    if (req.method === 'GET' && url.pathname === '/api/update/check') return send(200, { ok: true, data: await updateCheck() });
+    if (req.method === 'GET' && url.pathname === '/api/update/status') return send(200, { ok: true, data: updateJob });
+    if (req.method === 'POST' && url.pathname === '/api/update/apply') {
+      if (updateJob?.running) return send(409, { ok: false, error: 'An update is already running.' });
+      return send(200, await updateApply(!!body.force));
+    }
 
     if (req.method === 'POST' && url.pathname === '/api/agents') {
       const { name, provider, template } = body;

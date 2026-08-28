@@ -54,3 +54,15 @@ Optional environment:
 
 Vault-backed keys need a working OneCLI gateway — the same one NanoClaw already
 uses for its own credentials. Everything else works without it.
+
+## Updating NanoClaw
+
+The **Version** row in the host box shows `v<current> → v<latest>` when an update
+is available; clicking it opens the updater. It tags a rollback point, merges
+upstream, installs, builds, rebuilds the sandbox image only if `container/`
+changed, restarts and verifies — rolling back automatically if the build fails.
+
+It deliberately does **not** apply a release carrying `[BREAKING]` changelog
+entries without you seeing them first: those can need migrations a button
+cannot make. For those, run `/update-nanoclaw` in Claude Code, which stages the
+whole thing in a worktree behind migration gates.

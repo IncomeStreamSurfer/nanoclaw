@@ -182,6 +182,7 @@
       <div class="hrow"><span>Sandbox</span><span class="mono" style="color:var(--dim)">docker</span></div>
       <div class="hrow"><span>Vault</span><span class="mono" style="color:var(--good)">locked</span></div>
       <div class="hrow"><span>Bots</span><span class="mono" id="hostBots" style="color:var(--dim)">—</span></div>
+      <div class="hrow" id="verRow" style="cursor:pointer" onclick="openUpdate()"><span>Version</span><span class="mono" id="verVal" style="color:var(--dim)">—</span></div>
     </div>
   </div>
 </div>
@@ -279,6 +280,14 @@
     <div id="skStatus" class="muted" style="margin-top:10px"></div>
   </div>
   <div class="dlg-f"><div style="margin-left:auto"><button onclick="dlgSkills.close()">Close</button></div></div>
+</dialog>
+
+<dialog id="dlgUpdate">
+  <div class="dlg-h"><h3>Update NanoClaw</h3>
+    <div class="muted" style="margin-top:5px" id="upSub">Checking for updates…</div></div>
+  <div class="dlg-b" id="upBody"></div>
+  <div class="dlg-f"><div class="muted" style="font-size:12.5px" id="upNote"></div>
+    <div style="margin-left:auto" class="row" id="upActions"><button onclick="dlgUpdate.close()">Close</button></div></div>
 </dialog>
 
 <div id="toast"></div>
@@ -519,6 +528,66 @@ function runCard(r){
   </div>`;
 }
 
+/* ── updating NanoClaw ─────────────────────────────────────── */
+let upInfo=null, upPoll=null;
+function verLabel(){
+  if(!upInfo) return '—';
+  return upInfo.upToDate?('v'+upInfo.current):('v'+upInfo.current+' → v'+upInfo.latest);
+}
+async function checkUpdate(){
+  const r=await api('/api/update/check'); upInfo=r.data||null;
+  const v=$('verVal'); if(!v||!upInfo) return;
+  v.textContent=verLabel();
+  v.style.color=upInfo.upToDate?'var(--dim)':'var(--accent)';
+  $('verRow').title=upInfo.upToDate?'Up to date':`${upInfo.behind} commits behind — click to update`;
+}
+function openUpdate(){ dlgUpdate.showModal(); renderUpdate(); if(!upInfo) checkUpdate().then(renderUpdate); }
+function renderUpdate(){
+  const b=$('upBody'), a=$('upActions'), n=$('upNote'), s=$('upSub');
+  const job=window._upJob;
+  if(job){
+    s.textContent=job.running?'Updating — this takes a few minutes.':(job.failed?'Update stopped.':'Update complete.');
+    b.innerHTML=job.steps.map(st=>`<div class="row" style="gap:10px;padding:7px 0;border-bottom:1px solid var(--line)">
+      ${st.state==='running'?'<span class="spin"></span>':st.state==='done'
+        ?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"></path></svg>'
+        :'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--bad)" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>'}
+      <span style="font-size:13.5px">${esc(st.name)}</span>
+      <span class="muted" style="margin-left:auto;font-size:12px;text-align:right;max-width:300px">${esc(st.detail||'')}</span></div>`).join('');
+    n.textContent=job.failed?('Rollback point: '+job.rollback):(job.running?'':'Restarted and verified.');
+    a.innerHTML='<button onclick="dlgUpdate.close()">Close</button>';
+    return;
+  }
+  if(!upInfo){ b.innerHTML='<div class="muted">Checking…</div>'; return; }
+  s.textContent=upInfo.upToDate?`You're on the latest version.`:`Version ${upInfo.current} installed · ${upInfo.latest} available`;
+  const rows=[];
+  rows.push(`<div class="row" style="justify-content:space-between;padding:6px 0"><span class="muted">Installed</span><span class="mono">v${esc(upInfo.current)}</span></div>`);
+  rows.push(`<div class="row" style="justify-content:space-between;padding:6px 0"><span class="muted">Latest</span><span class="mono" style="color:${upInfo.upToDate?'var(--dim)':'var(--accent)'}">v${esc(upInfo.latest)}</span></div>`);
+  if(!upInfo.upToDate) rows.push(`<div class="row" style="justify-content:space-between;padding:6px 0"><span class="muted">Behind by</span><span class="mono">${upInfo.behind} commits</span></div>`);
+  if(upInfo.containerChanged) rows.push(`<div class="row" style="justify-content:space-between;padding:6px 0"><span class="muted">Sandbox image</span><span class="mono" style="color:var(--accent)">rebuild needed (slow)</span></div>`);
+  if(upInfo.dirty) rows.push(`<div class="note" style="border-color:var(--bad);background:transparent;margin-top:10px">${upInfo.dirty} uncommitted change(s) in the checkout. Commit or stash them first — the update refuses to run over local edits.</div>`);
+  if(upInfo.breaking.length) rows.push(`<div class="note" style="border-color:var(--accent);background:var(--accent-soft);margin-top:10px">
+    <div><b style="color:var(--text)">This release has breaking changes.</b> They may need migrations this button cannot make. Read them, and prefer running <span class="mono">/update-nanoclaw</span> in Claude Code for the full transactional path with migration gates.
+    <ul style="margin:8px 0 0;padding-left:18px">${upInfo.breaking.slice(0,6).map(x=>`<li style="margin-bottom:4px">${esc(x)}</li>`).join('')}</ul></div></div>`);
+  b.innerHTML=rows.join('');
+  n.textContent=upInfo.upToDate?'':'A rollback point is tagged before anything changes.';
+  a.innerHTML=`<button onclick="dlgUpdate.close()">Close</button>`+
+    (upInfo.upToDate||upInfo.dirty?'':`<button class="primary" onclick="applyUpdate(${upInfo.breaking.length?'true':'false'})">${upInfo.breaking.length?'Update anyway':'Update now'}</button>`);
+}
+async function applyUpdate(force){
+  const r=await api('/api/update/apply',{force});
+  if(!r.ok){ toast('Update failed: '+errMsg(r),false); return; }
+  window._upJob={running:true,steps:[],rollback:r.data.rollback};
+  renderUpdate();
+  clearInterval(upPoll);
+  upPoll=setInterval(async()=>{
+    const st=await api('/api/update/status');
+    window._upJob=st.data||window._upJob;
+    renderUpdate();
+    if(window._upJob&&!window._upJob.running){ clearInterval(upPoll); checkUpdate(); refresh();
+      toast(window._upJob.failed?('Update stopped: '+window._upJob.failed):'NanoClaw updated', !window._upJob.failed); }
+  },2000);
+}
+
 /* actions */
 function toggleTools(id){toolsOpen[id]=!toolsOpen[id];render();}
 function setOut(id,running,text){outputs[id]={running,text};render();}
@@ -587,7 +656,7 @@ async function task(id,a){const r=await api(`/api/tasks/${id}/${a}`,{});toast(r.
 async function showHistory(id,btn){const box=btn.closest('.card').querySelector('.out.hist');const txt=box.querySelector('.txt');
   const r=await api(`/api/tasks/${id}/history`);txt.textContent=r.ok?r.data:'Failed: '+errMsg(r);box.style.display='block';}
 
-refresh();loadRuns();setInterval(()=>{refresh();loadRuns();},20000);
+refresh();loadRuns();checkUpdate();setInterval(()=>{refresh();loadRuns();},20000);setInterval(checkUpdate,3600000);
 </script>
 </body>
 </html>
